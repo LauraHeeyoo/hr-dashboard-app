@@ -209,20 +209,41 @@ body {
     grid-column: 1 / -1;
 }
 
-/* Shrinks the tile to the chart's own rendered size (e.g. a 4-category
-   Opleidingsniveau chart) instead of stretching to fill its whole grid
-   column; when the chart is wider than the column (many categories, e.g.
-   Functie/Manager), it clamps to the column width and .chart-scroll below
-   takes over with a horizontal scrollbar. */
-.chart-card-fit {
-    width: fit-content;
-    max-width: 100%;
-    justify-self: start;
-}
-
 .chart-scroll {
     overflow-x: auto;
     padding-bottom: 4px;
+}
+
+/* The paired "Aantal medewerkers" / "Verdeling salaris t.o.v. benchmark"
+   section: one shared dimension-switcher above two charts side by side. */
+.dimension-charts {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    margin-top: 4px;
+}
+
+@media (max-width: 900px) {
+    .dimension-charts { grid-template-columns: 1fr; }
+}
+
+.dimension-chart-col h3 {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin: 0 0 10px;
+}
+
+/* Shrinks each chart column to its own rendered size (e.g. a 3-category
+   Tevredenheid breakdown) instead of stretching to fill half the card; when
+   a column's chart is wider than that half (many categories, e.g. Functie/
+   Manager), it clamps to the available width and .chart-scroll takes over
+   with a horizontal scrollbar. */
+.dimension-chart-col {
+    width: fit-content;
+    max-width: 100%;
+    min-width: 0;
+    justify-self: start;
 }
 
 .chart-card h2 {

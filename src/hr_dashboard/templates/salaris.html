@@ -107,19 +107,32 @@
         </section>
 
         <section class="chart-row">
-            <div class="chart-card">
+            <div class="chart-card chart-card-wide">
                 <h2>Spreiding salaris</h2>
                 <div id="chart-distribution"></div>
             </div>
-            <div class="chart-card chart-card-fit">
-                <h2>Verdeling salaris t.o.v. benchmark, per {{ by_dimension_title|lower }}</h2>
+        </section>
+
+        <section class="chart-row">
+            <div class="chart-card chart-card-wide">
                 <div class="dimension-switcher">
                     {% for key, label in dimension_options.items() %}
                     <a href="{{ dimension_urls[key] }}" class="dimension-pill {% if dimension == key %}active{% endif %}">{{ label }}</a>
                     {% endfor %}
                 </div>
-                <div class="chart-scroll">
-                    <div id="chart-dimension"></div>
+                <div class="dimension-charts">
+                    <div class="dimension-chart-col">
+                        <h3>Aantal medewerkers, per {{ by_dimension_title|lower }}</h3>
+                        <div class="chart-scroll">
+                            <div id="chart-headcount"></div>
+                        </div>
+                    </div>
+                    <div class="dimension-chart-col">
+                        <h3>Verdeling salaris t.o.v. benchmark, per {{ by_dimension_title|lower }}</h3>
+                        <div class="chart-scroll">
+                            <div id="chart-benchmark"></div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </section>
@@ -141,7 +154,8 @@ document.querySelectorAll('#filter-form select, #filter-form input[type="date"]'
 });
 
 const distributionData = {{ distribution_json | safe }};
-const byDimensionData = {{ by_dimension_json | safe }};
+const headcountByDimensionData = {{ headcount_by_dimension_json | safe }};
+const benchmarkByDimensionData = {{ benchmark_by_dimension_json | safe }};
 const lflTrendData = {{ lfl_trend_json | safe }};
 
 const CATEGORY_ORDER = [
@@ -149,6 +163,13 @@ const CATEGORY_ORDER = [
     "EUR 60.000 - 79.999", "EUR 80.000 - 99.999", "EUR 100.000 en hoger"
 ];
 const CATEGORY_COLORS = ["#2a78d6", "#1baf7a", "#10bdc6", "#eda100", "#eb6834", "#e34948"];
+
+// Must stay in sync with BENCHMARK_STATUS_ORDER in salary.py.
+const BENCHMARK_ORDER = [
+    "Ver onder benchmark", "Onder benchmark", "Rond benchmark",
+    "Boven benchmark", "Ver boven benchmark"
+];
+const BENCHMARK_COLORS = ["#b5332e", "#eda100", "#9aa0a6", "#59b88c", "#1a7a4c"];
 
 const baseConfig = {
     background: null,
@@ -176,10 +197,10 @@ vegaEmbed("#chart-distribution", {
     config: baseConfig
 }, { actions: false });
 
-vegaEmbed("#chart-dimension", {
+vegaEmbed("#chart-headcount", {
     $schema: "https://vega.github.io/schema/vega-lite/v6.json",
     width: { step: 28 }, height: 260,
-    data: { values: byDimensionData },
+    data: { values: headcountByDimensionData },
     mark: "bar",
     encoding: {
         x: { field: "dimension_value", type: "nominal", sort: "-y", title: null, axis: { labelAngle: -40 } },
@@ -190,6 +211,24 @@ vegaEmbed("#chart-dimension", {
             legend: { title: "Categorie" }
         },
         tooltip: [{ field: "dimension_value", title: "Waarde" }, { field: "Salaris_Categorie", title: "Categorie" }, { field: "aantal", aggregate: "sum", title: "Aantal" }]
+    },
+    config: baseConfig
+}, { actions: false });
+
+vegaEmbed("#chart-benchmark", {
+    $schema: "https://vega.github.io/schema/vega-lite/v6.json",
+    width: { step: 28 }, height: 260,
+    data: { values: benchmarkByDimensionData },
+    mark: "bar",
+    encoding: {
+        x: { field: "dimension_value", type: "nominal", sort: "-y", title: null, axis: { labelAngle: -40 } },
+        y: { field: "aantal", type: "quantitative", aggregate: "sum", title: "Aantal medewerkers" },
+        color: {
+            field: "Benchmark_Status", type: "nominal", sort: BENCHMARK_ORDER,
+            scale: { domain: BENCHMARK_ORDER, range: BENCHMARK_COLORS },
+            legend: { title: "Benchmark" }
+        },
+        tooltip: [{ field: "dimension_value", title: "Waarde" }, { field: "Benchmark_Status", title: "Benchmark" }, { field: "aantal", aggregate: "sum", title: "Aantal" }]
     },
     config: baseConfig
 }, { actions: false });

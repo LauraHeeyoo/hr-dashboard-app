@@ -22,17 +22,27 @@ from hr_dashboard.db.connection import get_connection
 # Allowlist: catalog key -> real SQL identifier. This is the mechanism, not
 # string interpolation, that keeps "which column to group by" safe even
 # once this is driven by user/LLM input in a later phase.
+#
+# Matches the old PBIP's own dimension-switcher parameter (`Parameter dim
+# slicer salaris`) field-for-field, including its order — Afdeling, Manager,
+# Functie, Performance, Tevredenheid. Opleidingsniveau is a filter-rail field
+# only there, never a breakdown dimension, so it's deliberately absent here.
+# One intentional deviation: the old parameter grouped Manager by first name
+# only (`dim_manager[Voornaam]`), which collides whenever two managers share
+# a first name; this groups by full name instead, like the filter rail does.
 DIMENSION_COLUMNS: dict[str, str] = {
     "afdeling": "Afdeling_Naam",
-    "functie": "Functie_Naam",
     "manager": "Manager_Naam",
-    "opleidingsniveau": "Opleidingsniveau",
+    "functie": "Functie_Naam",
+    "performance": "Performance_Bin",
+    "tevredenheid": "Tevredenheidsband_Naam",
 }
 DIMENSION_LABELS: dict[str, str] = {
     "afdeling": "Afdeling",
-    "functie": "Functie",
     "manager": "Manager",
-    "opleidingsniveau": "Opleidingsniveau",
+    "functie": "Functie",
+    "performance": "Performance",
+    "tevredenheid": "Tevredenheid",
 }
 
 # Every filter-rail field -> the column mcp.fn_workforce_snapshot_asof
@@ -54,6 +64,14 @@ FILTER_FIELD_COLUMNS: dict[str, str] = {
 SALARY_CATEGORY_ORDER: list[str] = [
     "Onder EUR 35.000", "EUR 35.000 - 44.999", "EUR 45.000 - 59.999",
     "EUR 60.000 - 79.999", "EUR 80.000 - 99.999", "EUR 100.000 en hoger",
+]
+
+# Must stay in sync with BENCHMARK_ORDER in salaris.html — mirrors the old
+# PBIP's `Benchmark groepen` calculated column (fact_workforce_snapshot),
+# which prefixes Benchmark_Status with its rank for the same reason.
+BENCHMARK_STATUS_ORDER: list[str] = [
+    "Ver onder benchmark", "Onder benchmark", "Rond benchmark",
+    "Boven benchmark", "Ver boven benchmark",
 ]
 
 
@@ -195,16 +213,21 @@ def get_salary_distribution(as_of_date: date, filters: SalaryFilters) -> list[di
         return _rows_as_dicts(cur)
 
 
-def get_salary_by_dimension(as_of_date: date, dimension: str, filters: SalaryFilters) -> list[dict]:
-    """Headcount by Salaris_Categorie, grouped by an approved dimension.
-
-    `dimension` must be a key in DIMENSION_COLUMNS — anything else raises
-    before touching SQL. The actual column name substituted into the query
-    always comes from the dict, never from `dimension` itself.
-    """
+def _validate_dimension(dimension: str) -> str:
+    """Returns the real SQL column for `dimension`, or raises — never lets
+    the caller's string reach SQL directly (DIMENSION_COLUMNS is the
+    allowlist, ARCHITECTURE.md §7.4)."""
     if dimension not in DIMENSION_COLUMNS:
         raise ValueError(f"Unknown dimension: {dimension!r} (allowed: {list(DIMENSION_COLUMNS)})")
-    column = DIMENSION_COLUMNS[dimension]
+    return DIMENSION_COLUMNS[dimension]
+
+
+def get_headcount_by_dimension(
+    as_of_date: date, dimension: str, filters: SalaryFilters
+) -> list[dict]:
+    """Headcount by Salaris_Categorie, grouped by an approved dimension —
+    the old PBIP's "Aantal medewerkers" chart."""
+    column = _validate_dimension(dimension)
     params = (as_of_date, *filters.as_sql_params())
 
     with get_connection() as conn:
@@ -215,6 +238,29 @@ def get_salary_by_dimension(as_of_date: date, dimension: str, filters: SalaryFil
             FROM mcp.fn_workforce_snapshot_asof(?, ?, ?, ?, ?, ?, ?)
             WHERE {column} IS NOT NULL
             GROUP BY {column}, Salaris_Categorie
+            """,
+            params,
+        )
+        return _rows_as_dicts(cur)
+
+
+def get_benchmark_distribution_by_dimension(
+    as_of_date: date, dimension: str, filters: SalaryFilters
+) -> list[dict]:
+    """Headcount by Benchmark_Status, grouped by an approved dimension — the
+    old PBIP's "Verdeling salaris t.o.v. benchmark" chart. Distinct from
+    get_headcount_by_dimension, which colors by salary band instead."""
+    column = _validate_dimension(dimension)
+    params = (as_of_date, *filters.as_sql_params())
+
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            SELECT {column} AS dimension_value, Benchmark_Status, COUNT(*) AS aantal
+            FROM mcp.fn_workforce_snapshot_asof(?, ?, ?, ?, ?, ?, ?)
+            WHERE {column} IS NOT NULL AND Benchmark_Status IS NOT NULL
+            GROUP BY {column}, Benchmark_Status
             """,
             params,
         )

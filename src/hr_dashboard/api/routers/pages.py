@@ -59,7 +59,10 @@ def salaris_page(
 
     kpis = salary.get_salary_kpis(peildatum, filters)
     distribution = salary.get_salary_distribution(peildatum, filters)
-    by_dimension = salary.get_salary_by_dimension(peildatum, dimension, filters)
+    headcount_by_dimension = salary.get_headcount_by_dimension(peildatum, dimension, filters)
+    benchmark_by_dimension = salary.get_benchmark_distribution_by_dimension(
+        peildatum, dimension, filters
+    )
     filter_options = salary.get_filter_options(peildatum, filters)
 
     trend_start = date(peildatum.year - 4, peildatum.month, 1)
@@ -87,7 +90,12 @@ def salaris_page(
             "dimension_urls": dimension_urls,
             "by_dimension_title": salary.DIMENSION_LABELS[dimension],
             "distribution_json": json.dumps(distribution, default=_json_default),
-            "by_dimension_json": json.dumps(by_dimension, default=_json_default),
+            "headcount_by_dimension_json": json.dumps(
+                headcount_by_dimension, default=_json_default
+            ),
+            "benchmark_by_dimension_json": json.dumps(
+                benchmark_by_dimension, default=_json_default
+            ),
             "lfl_trend_json": json.dumps(lfl_trend, default=_json_default),
         },
     )

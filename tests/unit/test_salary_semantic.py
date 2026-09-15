@@ -45,18 +45,33 @@ def test_salary_distribution_uses_canonical_categories():
     assert seen <= valid_categories, f"unexpected categories: {seen - valid_categories}"
 
 
-def test_salary_by_dimension_rejects_unknown_dimension():
+def test_headcount_by_dimension_rejects_unknown_dimension():
     try:
-        salary.get_salary_by_dimension(AS_OF, "not_a_real_dimension", NO_FILTERS)
+        salary.get_headcount_by_dimension(AS_OF, "not_a_real_dimension", NO_FILTERS)
         assert False, "expected ValueError"
     except ValueError:
         pass
 
 
-def test_salary_by_dimension_known_dimensions_return_rows():
+def test_headcount_by_dimension_known_dimensions_return_rows():
     for dim in salary.DIMENSION_COLUMNS:
-        rows = salary.get_salary_by_dimension(AS_OF, dim, NO_FILTERS)
+        rows = salary.get_headcount_by_dimension(AS_OF, dim, NO_FILTERS)
         assert len(rows) > 0, f"no rows for dimension {dim!r}"
+
+
+def test_benchmark_distribution_by_dimension_rejects_unknown_dimension():
+    try:
+        salary.get_benchmark_distribution_by_dimension(AS_OF, "not_a_real_dimension", NO_FILTERS)
+        assert False, "expected ValueError"
+    except ValueError:
+        pass
+
+
+def test_benchmark_distribution_by_dimension_uses_canonical_groups():
+    rows = salary.get_benchmark_distribution_by_dimension(AS_OF, "afdeling", NO_FILTERS)
+    assert len(rows) > 0
+    seen = {r["Benchmark_Status"] for r in rows}
+    assert seen <= set(salary.BENCHMARK_STATUS_ORDER), f"unexpected groups: {seen}"
 
 
 def test_lfl_growth_trend_is_a_small_percentage():
