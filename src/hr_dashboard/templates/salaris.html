@@ -13,7 +13,7 @@
 <div class="page-layout">
     <aside class="filter-rail">
         <h3>Filters</h3>
-        <form method="get" action="/salaris">
+        <form method="get" action="/salaris" id="filter-form">
             <div class="filter-field">
                 <label for="as_of">Peildatum</label>
                 <input type="date" id="as_of" name="as_of" value="{{ peildatum }}">
@@ -107,18 +107,23 @@
         </section>
 
         <section class="chart-row">
-            <div class="chart-card">
+            <div class="chart-card chart-card-wide">
                 <h2>Spreiding salaris</h2>
                 <div id="chart-distribution"></div>
             </div>
-            <div class="chart-card">
+        </section>
+
+        <section class="chart-row">
+            <div class="chart-card chart-card-wide">
                 <h2>Verdeling salaris t.o.v. benchmark, per {{ by_dimension_title|lower }}</h2>
                 <div class="dimension-switcher">
                     {% for key, label in dimension_options.items() %}
                     <a href="{{ dimension_urls[key] }}" class="dimension-pill {% if dimension == key %}active{% endif %}">{{ label }}</a>
                     {% endfor %}
                 </div>
-                <div id="chart-dimension"></div>
+                <div class="chart-scroll">
+                    <div id="chart-dimension"></div>
+                </div>
             </div>
         </section>
 
@@ -132,6 +137,12 @@
 </div>
 
 <script>
+// Auto-refresh: a filter change submits the form immediately, no need to
+// click "Toepassen" first (kept as a fallback for non-JS/keyboard use).
+document.querySelectorAll('#filter-form select, #filter-form input[type="date"]').forEach((el) => {
+    el.addEventListener('change', () => el.form.submit());
+});
+
 const distributionData = {{ distribution_json | safe }};
 const byDimensionData = {{ by_dimension_json | safe }};
 const lflTrendData = {{ lfl_trend_json | safe }};
@@ -170,11 +181,11 @@ vegaEmbed("#chart-distribution", {
 
 vegaEmbed("#chart-dimension", {
     $schema: "https://vega.github.io/schema/vega-lite/v6.json",
-    width: "container", height: 260,
+    width: { step: 28 }, height: 260,
     data: { values: byDimensionData },
     mark: "bar",
     encoding: {
-        x: { field: "dimension_value", type: "nominal", sort: "-y", title: null },
+        x: { field: "dimension_value", type: "nominal", sort: "-y", title: null, axis: { labelAngle: -40 } },
         y: { field: "aantal", type: "quantitative", aggregate: "sum", title: "Aantal medewerkers" },
         color: {
             field: "Salaris_Categorie", type: "nominal", sort: CATEGORY_ORDER,

@@ -17,6 +17,16 @@ def _json_default(value):
     return str(value)
 
 
+def _none_if_blank(value: str | None) -> str | None:
+    """A <select> left on its "Alle" option submits `name=` (empty string),
+    not an omitted param — FastAPI binds that to "", not None. Without this,
+    every filter round-tripped through the HTML form (not just the ones a
+    user actually picked) turns into a `column = ''` condition, which
+    matches nothing — exactly the "everything goes empty after Toepassen"
+    bug this fixes."""
+    return value if value else None
+
+
 @router.get("/")
 def index():
     return {"pages": ["/salaris"]}
@@ -39,12 +49,12 @@ def salaris_page(
 
     peildatum = as_of or salary.get_latest_snapshot_date()
     filters = SalaryFilters(
-        afdeling=afdeling,
-        functie=functie,
-        manager=manager,
-        opleidingsniveau=opleidingsniveau,
-        salaris_categorie=salaris_categorie,
-        bron=bron,
+        afdeling=_none_if_blank(afdeling),
+        functie=_none_if_blank(functie),
+        manager=_none_if_blank(manager),
+        opleidingsniveau=_none_if_blank(opleidingsniveau),
+        salaris_categorie=_none_if_blank(salaris_categorie),
+        bron=_none_if_blank(bron),
     )
 
     kpis = salary.get_salary_kpis(peildatum, filters)

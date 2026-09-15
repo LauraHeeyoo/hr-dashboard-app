@@ -209,6 +209,11 @@ body {
     grid-column: 1 / -1;
 }
 
+.chart-scroll {
+    overflow-x: auto;
+    padding-bottom: 4px;
+}
+
 .chart-card h2 {
     font-size: 0.95rem;
     margin: 0 0 12px;
