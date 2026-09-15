@@ -158,19 +158,15 @@ const headcountByDimensionData = {{ headcount_by_dimension_json | safe }};
 const benchmarkByDimensionData = {{ benchmark_by_dimension_json | safe }};
 const lflTrendData = {{ lfl_trend_json | safe }};
 
+// Salary bands, labeled with the old PBIP's own numbered, qualitative
+// names (dim_salary_band's DAX column 'Salaris categorie' — salary.py's
+// SALARY_CATEGORY_DISPLAY already relabeled the underlying data server-
+// side for both Spreiding salaris and "Aantal medewerkers").
 const CATEGORY_ORDER = [
-    "Onder EUR 35.000", "EUR 35.000 - 44.999", "EUR 45.000 - 59.999",
-    "EUR 60.000 - 79.999", "EUR 80.000 - 99.999", "EUR 100.000 en hoger"
-];
-const CATEGORY_COLORS = ["#2a78d6", "#1baf7a", "#10bdc6", "#eda100", "#eb6834", "#e34948"];
-
-// The "Aantal medewerkers" chart relabels the same bands with the old
-// PBIP's numbered names (salary.py — SALARY_CATEGORY_DISPLAY); same order
-// and colors as CATEGORY_ORDER/COLORS, just different labels.
-const HEADCOUNT_CATEGORY_ORDER = [
     "1. Laag", "2. Ondergemiddeld", "3. Gemiddeld",
     "4. Bovengemiddeld", "5. Hoog", "6. Extreem hoog"
 ];
+const CATEGORY_COLORS = ["#2a78d6", "#1baf7a", "#10bdc6", "#eda100", "#eb6834", "#e34948"];
 
 // Must stay in sync with BENCHMARK_STATUS_ORDER in salary.py.
 const BENCHMARK_ORDER = [
@@ -198,7 +194,7 @@ vegaEmbed("#chart-distribution", {
         color: {
             field: "Salaris_Categorie", type: "nominal", sort: CATEGORY_ORDER,
             scale: { domain: CATEGORY_ORDER, range: CATEGORY_COLORS },
-            legend: { title: "Categorie" }
+            legend: { title: "Salaris categorie" }
         },
         tooltip: [{ field: "Salaris_Categorie", title: "Categorie" }, { aggregate: "count", title: "Aantal" }]
     },
@@ -214,8 +210,8 @@ vegaEmbed("#chart-headcount", {
         y: { field: "dimension_value", type: "nominal", sort: "-x", title: null },
         x: { field: "aantal", type: "quantitative", aggregate: "sum", title: "Aantal medewerkers" },
         color: {
-            field: "Salaris_Categorie", type: "nominal", sort: HEADCOUNT_CATEGORY_ORDER,
-            scale: { domain: HEADCOUNT_CATEGORY_ORDER, range: CATEGORY_COLORS },
+            field: "Salaris_Categorie", type: "nominal", sort: CATEGORY_ORDER,
+            scale: { domain: CATEGORY_ORDER, range: CATEGORY_COLORS },
             legend: { title: "Salaris categorie" }
         },
         tooltip: [{ field: "dimension_value", title: "Waarde" }, { field: "Salaris_Categorie", title: "Categorie" }, { field: "aantal", aggregate: "sum", title: "Aantal" }]

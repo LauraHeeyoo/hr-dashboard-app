@@ -66,11 +66,11 @@ SALARY_CATEGORY_ORDER: list[str] = [
     "EUR 60.000 - 79.999", "EUR 80.000 - 99.999", "EUR 100.000 en hoger",
 ]
 
-# The "Aantal medewerkers" combi-chart relabels the same salary bands with
-# the old PBIP's own numbered, qualitative names (dim_salary_band's DAX
-# calculated column 'Salaris categorie') instead of the currency-range
-# names used everywhere else in this app (Spreiding salaris, the
-# Salarisgroep filter) — deliberately not applied globally, only there.
+# Spreiding salaris and the "Aantal medewerkers" combi-chart both relabel
+# these same salary bands with the old PBIP's own numbered, qualitative
+# names (dim_salary_band's DAX calculated column 'Salaris categorie')
+# instead of the currency-range names — the Salarisgroep filter dropdown
+# and the raw Salaris_Categorie column keep the currency-range names.
 SALARY_CATEGORY_DISPLAY: dict[str, str] = {
     "Onder EUR 35.000": "1. Laag",
     "EUR 35.000 - 44.999": "2. Ondergemiddeld",
@@ -216,6 +216,16 @@ def get_salary_kpis(as_of_date: date, filters: SalaryFilters) -> SalaryKpis:
         )
 
 
+def _relabel_salaris_categorie(rows: list[dict]) -> list[dict]:
+    """Swaps each row's Salaris_Categorie for the old PBIP's own numbered,
+    qualitative salary-band name (SALARY_CATEGORY_DISPLAY) in place."""
+    for row in rows:
+        row["Salaris_Categorie"] = SALARY_CATEGORY_DISPLAY.get(
+            row["Salaris_Categorie"], row["Salaris_Categorie"]
+        )
+    return rows
+
+
 def get_salary_distribution(as_of_date: date, filters: SalaryFilters) -> list[dict]:
     """One row per employee: Salaris + Salaris_Categorie.
 
@@ -227,7 +237,7 @@ def get_salary_distribution(as_of_date: date, filters: SalaryFilters) -> list[di
     with get_connection() as conn:
         cur = conn.cursor()
         cur.execute(_snapshot_asof_sql("Employee_Key, Salaris, Salaris_Categorie"), params)
-        return _rows_as_dicts(cur)
+        return _relabel_salaris_categorie(_rows_as_dicts(cur))
 
 
 def _validate_dimension(dimension: str) -> str:
@@ -260,12 +270,7 @@ def get_headcount_by_dimension(
             """,
             params,
         )
-        rows = _rows_as_dicts(cur)
-        for row in rows:
-            row["Salaris_Categorie"] = SALARY_CATEGORY_DISPLAY.get(
-                row["Salaris_Categorie"], row["Salaris_Categorie"]
-            )
-        return rows
+        return _relabel_salaris_categorie(_rows_as_dicts(cur))
 
 
 def get_benchmark_distribution_by_dimension(

@@ -34,15 +34,14 @@ def test_salary_kpis_afdeling_filter_narrows_results():
     assert 0 < filtered.aantal_medewerkers < unfiltered.aantal_medewerkers
 
 
-def test_salary_distribution_uses_canonical_categories():
+def test_salary_distribution_uses_qualitative_salary_labels():
+    """Spreiding salaris colors by the old PBIP's own numbered salary-band
+    names ("1. Laag" ...), like the "Aantal medewerkers" combi-chart —
+    not the currency-range names used by the Salarisgroep filter."""
     rows = salary.get_salary_distribution(AS_OF, NO_FILTERS)
     assert len(rows) > 0
-    valid_categories = {
-        "Onder EUR 35.000", "EUR 35.000 - 44.999", "EUR 45.000 - 59.999",
-        "EUR 60.000 - 79.999", "EUR 80.000 - 99.999", "EUR 100.000 en hoger",
-    }
     seen = {r["Salaris_Categorie"] for r in rows if r["Salaris_Categorie"] is not None}
-    assert seen <= valid_categories, f"unexpected categories: {seen - valid_categories}"
+    assert seen <= set(salary.SALARY_CATEGORY_DISPLAY.values()), f"unexpected categories: {seen}"
 
 
 def test_headcount_by_dimension_rejects_unknown_dimension():
