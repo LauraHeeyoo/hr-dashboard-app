@@ -1,8 +1,6 @@
 -- ============================================================================
 -- mcp.fn_workforce_snapshot_asof(@as_of_date, @afdeling, @functie, @manager,
---                                 @opleidingsniveau, @salaris_categorie, @bron,
---                                 @benchmark_status, @performance_bin,
---                                 @tevredenheid)
+--                                 @opleidingsniveau, @salaris_categorie, @bron)
 --
 -- The reusable "op peildatum" (as-of) pattern: one row per employee, their
 -- latest fact_workforce_snapshot row with Snapshot_Date <= @as_of_date.
@@ -13,15 +11,11 @@
 -- lookup. It's an inline table-valued FUNCTION, not a plain VIEW, because
 -- it needs to accept parameters — a plain view can't.
 --
--- All filter parameters default to NULL ("no filter") and use the standard
--- `@param IS NULL OR column = @param` pattern — filtering happens in SQL,
--- not by fetching everything and filtering in Python (§7.3), and every
--- value is a bound parameter, never a string built from user input (§7.4).
--- The first six map to the Salaris page's filter rail; the last three
--- (@benchmark_status, @performance_bin, @tevredenheid) exist for the
--- click-to-cross-filter interaction (clicking a bar segment in a chart
--- applies it as an implicit extra filter, same as the rail) — they have no
--- rail dropdown of their own.
+-- All six filter parameters default to NULL ("no filter") and use the
+-- standard `@param IS NULL OR column = @param` pattern — filtering happens
+-- in SQL, not by fetching everything and filtering in Python (§7.3), and
+-- every value is a bound parameter, never a string built from user input
+-- (§7.4). These map directly to the Salaris page's filter rail.
 --
 -- Salaris_Categorie is the canonical definition from ARCHITECTURE.md §14.2:
 -- dim_salary_band's range-based intent, via a real BETWEEN comparison
@@ -36,9 +30,15 @@
 -- band", the same "prefer the person-level definition" reasoning as the
 -- tenure conflict in §14.1) — a minor bucketing default, not a headline
 -- business metric like salary category, so not logged as its own §14 entry.
--- The @performance_bin filter repeats this CASE expression rather than
--- referencing the Performance_Bin select-list alias, which T-SQL doesn't
--- allow a WHERE clause to see at the same query level.
+--
+-- Cross-visual interactivity (clicking a bar segment) is a client-side
+-- highlight, not a server-side filter — it fades unrelated marks in other
+-- charts using data already sent to the browser (salaris.html), rather
+-- than adding more parameters here. An earlier version of this function
+-- did add three extra filter params for a click-as-filter interaction;
+-- that turned out not to match how Power BI's own cross-highlight actually
+-- behaves (data stays visible, just dimmed, instead of disappearing), so
+-- it was reverted.
 -- ============================================================================
 CREATE OR ALTER FUNCTION mcp.fn_workforce_snapshot_asof (
     @as_of_date DATE,
@@ -47,10 +47,7 @@ CREATE OR ALTER FUNCTION mcp.fn_workforce_snapshot_asof (
     @manager NVARCHAR(101) = NULL,
     @opleidingsniveau NVARCHAR(20) = NULL,
     @salaris_categorie NVARCHAR(100) = NULL,
-    @bron NVARCHAR(100) = NULL,
-    @benchmark_status NVARCHAR(50) = NULL,
-    @performance_bin NVARCHAR(20) = NULL,
-    @tevredenheid NVARCHAR(50) = NULL
+    @bron NVARCHAR(100) = NULL
 )
 RETURNS TABLE
 AS
@@ -119,17 +116,5 @@ RETURN
       AND (@opleidingsniveau IS NULL OR edu.Opleidingsniveau = @opleidingsniveau)
       AND (@salaris_categorie IS NULL OR sb.Salarisband_Naam = @salaris_categorie)
       AND (@bron IS NULL OR hs.Bron_Naam = @bron)
-      AND (@benchmark_status IS NULL OR s.Benchmark_Status = @benchmark_status)
-      AND (@performance_bin IS NULL OR (
-              CASE
-                  WHEN s.Prestatie_Score IS NULL THEN NULL
-                  WHEN s.Prestatie_Score < 3.0 THEN '< 3.0'
-                  WHEN s.Prestatie_Score < 3.5 THEN '3.0 - 3.5'
-                  WHEN s.Prestatie_Score < 4.0 THEN '3.5 - 4.0'
-                  WHEN s.Prestatie_Score < 4.5 THEN '4.0 - 4.5'
-                  ELSE '4.5 - 5.0'
-              END
-          ) = @performance_bin)
-      AND (@tevredenheid IS NULL OR satb.Tevredenheidsband_Naam = @tevredenheid)
 );
 GO

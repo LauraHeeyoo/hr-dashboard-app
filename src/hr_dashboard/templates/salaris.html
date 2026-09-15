@@ -73,9 +73,6 @@
                 </select>
             </div>
             <input type="hidden" name="dimension" value="{{ dimension }}">
-            <input type="hidden" name="benchmark_status" value="{{ filters.benchmark_status or '' }}">
-            <input type="hidden" name="performance" value="{{ filters.performance or '' }}">
-            <input type="hidden" name="tevredenheid" value="{{ filters.tevredenheid or '' }}">
             <div class="filter-actions">
                 <button type="submit" class="btn btn-primary">Toepassen</button>
                 <a href="/salaris" class="btn btn-secondary">Wissen</a>
@@ -84,37 +81,27 @@
     </aside>
 
     <div class="page-content">
-        {% if filters.benchmark_status or filters.performance or filters.tevredenheid %}
-        <div class="cross-filter-banner">
-            <span>Grafiekfilter actief:</span>
-            {% if filters.benchmark_status %}<span class="cross-filter-chip">Benchmark: {{ filters.benchmark_status }}</span>{% endif %}
-            {% if filters.performance %}<span class="cross-filter-chip">Performance: {{ filters.performance }}</span>{% endif %}
-            {% if filters.tevredenheid %}<span class="cross-filter-chip">Tevredenheid: {{ filters.tevredenheid }}</span>{% endif %}
-            <a href="{{ cross_filter_clear_url }}" class="cross-filter-clear">Wissen</a>
-        </div>
-        {% endif %}
-
         <section class="kpi-row">
             <div class="kpi-card">
-                <div class="kpi-value">
+                <div class="kpi-value" id="kpi-median-salaris">
                     {% if kpis.median_salaris %}€{{ "{:,.0f}".format(kpis.median_salaris).replace(",", ".") }}{% else %}—{% endif %}
                 </div>
                 <div class="kpi-label">Mediaan salaris</div>
             </div>
             <div class="kpi-card">
-                <div class="kpi-value">
+                <div class="kpi-value" id="kpi-benchmark-ratio">
                     {% if kpis.gemiddeld_benchmark_ratio %}{{ "{:.1f}".format(kpis.gemiddeld_benchmark_ratio * 100) }}%{% else %}—{% endif %}
                 </div>
                 <div class="kpi-label">Gemiddeld t.o.v. benchmark</div>
             </div>
             <div class="kpi-card">
-                <div class="kpi-value">
+                <div class="kpi-value" id="kpi-pct-onder-benchmark">
                     {% if kpis.pct_onder_benchmark %}{{ "{:.1f}".format(kpis.pct_onder_benchmark * 100) }}%{% else %}—{% endif %}
                 </div>
                 <div class="kpi-label">% medewerkers onder benchmark</div>
             </div>
             <div class="kpi-card">
-                <div class="kpi-value">{{ kpis.aantal_medewerkers }}</div>
+                <div class="kpi-value" id="kpi-aantal-medewerkers">{{ kpis.aantal_medewerkers }}</div>
                 <div class="kpi-label">Actieve medewerkers</div>
             </div>
         </section>
@@ -166,65 +153,129 @@ document.querySelectorAll('#filter-form select, #filter-form input[type="date"]'
     el.addEventListener('change', () => el.form.submit());
 });
 
-const distributionData = {{ distribution_json | safe }};
+const employeeRows = {{ employee_rows_json | safe }};
 const headcountByDimensionData = {{ headcount_by_dimension_json | safe }};
 const benchmarkByDimensionData = {{ benchmark_by_dimension_json | safe }};
 const lflTrendData = {{ lfl_trend_json | safe }};
 
-// The dimension currently selected in the switcher — also the name of the
-// filter query param that a click's "dimension_value" belongs to, since
-// DIMENSION_COLUMNS' keys in salary.py (afdeling/manager/functie/
-// performance/tevredenheid) double as SalaryFilters field names.
+// The dimension currently selected in the switcher, and which raw
+// employee-row field it corresponds to (e.g. "manager" -> "Manager_Naam")
+// — salary.py's DIMENSION_COLUMNS serialized once, so this never drifts
+// out of sync with the Python side.
 const currentDimension = "{{ dimension }}";
+const dimensionColumns = {{ dimension_columns_json | safe }};
 
-// Reverse of salary.py's SALARY_CATEGORY_DISPLAY: a click on a qualitative
-// label ("1. Laag") needs to become the raw currency-range value the
-// salaris_categorie filter (and its rail dropdown) actually uses.
-const SALARY_CATEGORY_RAW = {
-    "1. Laag": "Onder EUR 35.000",
-    "2. Ondergemiddeld": "EUR 35.000 - 44.999",
-    "3. Gemiddeld": "EUR 45.000 - 59.999",
-    "4. Bovengemiddeld": "EUR 60.000 - 79.999",
-    "5. Hoog": "EUR 80.000 - 99.999",
-    "6. Extreem hoog": "EUR 100.000 en hoger"
-};
+// --- Click-to-highlight ------------------------------------------------
+// Clicking a bar segment fades everything that doesn't match it, in every
+// chart, and recomputes the KPI tiles for just the highlighted subset —
+// nothing disappears and no server round trip happens (ARCHITECTURE.md —
+// Laura: this replaced an earlier version where a click applied a real
+// SQL filter, which doesn't match how Power BI's own cross-highlight
+// actually behaves, and required a full page reload per click).
+//
+// Each chart keeps its own vegaEmbed() call / own HTML tile — there's no
+// single combined spec — but all of them read the same "hl" signal
+// (a plain Vega-Lite value parameter, not a selection), which this code
+// pushes into every chart's view after a click in any one of them.
+let currentHighlight = null; // {dimVal, colorField, colorVal} | null
+const highlightViews = [];
 
-// Click-to-cross-filter: clicking a bar (segment) applies its category as
-// an extra filter, combined with (AND) whatever's already selected —
-// clicking the very same value again clears just that one field (a
-// toggle), same as Power BI's click-to-select-then-click-to-deselect.
-// The whole page re-renders via a normal navigation, so every visual
-// (KPIs included) reflects the new filter combination, not just a visual
-// highlight — ARCHITECTURE.md, Laura's cross-filter request.
-function applyCrossFilterFromClick(fields) {
-    const params = new URLSearchParams(window.location.search);
-    for (const [key, value] of Object.entries(fields)) {
-        if (value === undefined || value === null) continue;
-        if (params.get(key) === String(value)) {
-            params.delete(key);
-        } else {
-            params.set(key, value);
-        }
-    }
-    window.location.search = params.toString();
+function sameHighlight(a, b) {
+    if (a === b) return true;
+    if (!a || !b) return false;
+    return a.dimVal === b.dimVal && a.colorField === b.colorField && a.colorVal === b.colorVal;
 }
 
-function wireClickToFilter(viewPromise, { dimensionField, colorField, colorRawMap }) {
+function setHighlight(next) {
+    currentHighlight = sameHighlight(currentHighlight, next) ? null : next;
+    highlightViews.forEach((view) => {
+        view.signal("hl", currentHighlight);
+        view.runAsync();
+    });
+    updateKpisForHighlight();
+}
+
+function wireHighlight(viewPromise, { dimensionField, colorField }) {
     viewPromise.then((result) => {
+        highlightViews.push(result.view);
         result.view.addEventListener("click", (event, item) => {
-            if (!item || !item.datum) return;
-            const fields = {};
+            if (!item || !item.datum) {
+                setHighlight(null);
+                return;
+            }
+            const next = { dimVal: null, colorField: null, colorVal: null };
             if (dimensionField && item.datum[dimensionField] !== undefined) {
-                fields[currentDimension] = item.datum[dimensionField];
+                next.dimVal = item.datum[dimensionField];
             }
             if (colorField && item.datum[colorField] !== undefined) {
-                const raw = item.datum[colorField];
-                fields[colorField === "Salaris_Categorie" ? "salaris_categorie" : "benchmark_status"] =
-                    colorRawMap ? (colorRawMap[raw] || raw) : raw;
+                next.colorField = colorField;
+                next.colorVal = item.datum[colorField];
             }
-            if (Object.keys(fields).length > 0) applyCrossFilterFromClick(fields);
+            setHighlight(next);
         });
     });
+}
+
+// --- KPI tiles: recomputed client-side from employeeRows, since the
+// highlighted subset never touches the server. When nothing is
+// highlighted, the tiles just show the server-rendered baseline again
+// (captured once, up front) rather than recomputing it a second way.
+const kpiElements = {
+    medianSalaris: document.getElementById("kpi-median-salaris"),
+    benchmarkRatio: document.getElementById("kpi-benchmark-ratio"),
+    pctOnderBenchmark: document.getElementById("kpi-pct-onder-benchmark"),
+    aantalMedewerkers: document.getElementById("kpi-aantal-medewerkers"),
+};
+const kpiBaseline = Object.fromEntries(
+    Object.entries(kpiElements).map(([key, el]) => [key, el.textContent])
+);
+
+function median(values) {
+    const sorted = [...values].sort((a, b) => a - b);
+    const n = sorted.length;
+    if (n === 0) return null;
+    const idx = (n - 1) / 2;
+    const lo = Math.floor(idx);
+    const hi = Math.ceil(idx);
+    return sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo);
+}
+
+function formatEuro(value) {
+    return "€" + Math.round(value).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+}
+
+function formatPct(fraction) {
+    return (fraction * 100).toFixed(1) + "%";
+}
+
+function matchesHighlight(row, hl) {
+    if (!hl) return true;
+    if (hl.dimVal !== null) {
+        const field = dimensionColumns[currentDimension];
+        if (row[field] !== hl.dimVal) return false;
+    }
+    if (hl.colorField && row[hl.colorField] !== hl.colorVal) return false;
+    return true;
+}
+
+function updateKpisForHighlight() {
+    if (!currentHighlight) {
+        for (const [key, el] of Object.entries(kpiElements)) el.textContent = kpiBaseline[key];
+        return;
+    }
+    const subset = employeeRows.filter((row) => matchesHighlight(row, currentHighlight));
+    const ratios = subset.map((r) => r.Benchmark_Ratio).filter((r) => r !== null && r !== undefined);
+
+    kpiElements.aantalMedewerkers.textContent = subset.length;
+    kpiElements.medianSalaris.textContent = subset.length
+        ? formatEuro(median(subset.map((r) => r.Salaris)))
+        : "—";
+    kpiElements.benchmarkRatio.textContent = ratios.length
+        ? formatPct(ratios.reduce((a, b) => a + b, 0) / ratios.length)
+        : "—";
+    kpiElements.pctOnderBenchmark.textContent = ratios.length
+        ? formatPct(ratios.filter((r) => r < 1.0).length / ratios.length)
+        : "—";
 }
 
 // Salary bands, labeled with the old PBIP's own numbered, qualitative
@@ -252,11 +303,20 @@ const baseConfig = {
     view: { stroke: null }
 };
 
-wireClickToFilter(
+// A plain (non-selection) Vega-Lite value parameter — every chart gets its
+// own "hl" signal, all kept in sync by setHighlight() above. The opacity
+// conditions below short-circuit on `hl == null` before touching any of
+// its properties, and on the chart's own field not matching the
+// highlight's colorField, so an unrelated chart just stays fully visible.
+const HIGHLIGHT_PARAM = [{ name: "hl", value: null }];
+const DIMMED_OPACITY = 0.2;
+
+wireHighlight(
     vegaEmbed("#chart-distribution", {
         $schema: "https://vega.github.io/schema/vega-lite/v6.json",
         width: "container", height: 260,
-        data: { values: distributionData },
+        data: { values: employeeRows },
+        params: HIGHLIGHT_PARAM,
         mark: { type: "bar", cornerRadiusTopLeft: 3, cornerRadiusTopRight: 3, cursor: "pointer" },
         encoding: {
             x: { bin: { step: 5000 }, field: "Salaris", type: "quantitative", title: "Salaris (€)" },
@@ -266,18 +326,26 @@ wireClickToFilter(
                 scale: { domain: CATEGORY_ORDER, range: CATEGORY_COLORS },
                 legend: { title: "Salaris categorie" }
             },
+            opacity: {
+                condition: {
+                    test: "hl == null || hl.colorField !== 'Salaris_Categorie' || datum.Salaris_Categorie === hl.colorVal",
+                    value: 1
+                },
+                value: DIMMED_OPACITY
+            },
             tooltip: [{ field: "Salaris_Categorie", title: "Categorie" }, { aggregate: "count", title: "Aantal" }]
         },
         config: baseConfig
     }, { actions: false }),
-    { colorField: "Salaris_Categorie", colorRawMap: SALARY_CATEGORY_RAW }
+    { colorField: "Salaris_Categorie" }
 );
 
-wireClickToFilter(
+wireHighlight(
     vegaEmbed("#chart-headcount", {
         $schema: "https://vega.github.io/schema/vega-lite/v6.json",
         width: "container", height: { step: 22 },
         data: { values: headcountByDimensionData },
+        params: HIGHLIGHT_PARAM,
         mark: { type: "bar", cursor: "pointer" },
         encoding: {
             y: { field: "dimension_value", type: "nominal", sort: "-x", title: null },
@@ -287,18 +355,26 @@ wireClickToFilter(
                 scale: { domain: CATEGORY_ORDER, range: CATEGORY_COLORS },
                 legend: { title: "Salaris categorie" }
             },
+            opacity: {
+                condition: {
+                    test: "hl == null || ((hl.dimVal == null || datum.dimension_value === hl.dimVal) && (hl.colorField !== 'Salaris_Categorie' || datum.Salaris_Categorie === hl.colorVal))",
+                    value: 1
+                },
+                value: DIMMED_OPACITY
+            },
             tooltip: [{ field: "dimension_value", title: "Waarde" }, { field: "Salaris_Categorie", title: "Categorie" }, { field: "aantal", aggregate: "sum", title: "Aantal" }]
         },
         config: baseConfig
     }, { actions: false }),
-    { dimensionField: "dimension_value", colorField: "Salaris_Categorie", colorRawMap: SALARY_CATEGORY_RAW }
+    { dimensionField: "dimension_value", colorField: "Salaris_Categorie" }
 );
 
-wireClickToFilter(
+wireHighlight(
     vegaEmbed("#chart-benchmark", {
         $schema: "https://vega.github.io/schema/vega-lite/v6.json",
         width: "container", height: { step: 22 },
         data: { values: benchmarkByDimensionData },
+        params: HIGHLIGHT_PARAM,
         mark: { type: "bar", cursor: "pointer" },
         encoding: {
             y: { field: "dimension_value", type: "nominal", sort: "-x", title: null },
@@ -310,6 +386,13 @@ wireClickToFilter(
                 field: "Benchmark_Status", type: "nominal", sort: BENCHMARK_ORDER,
                 scale: { domain: BENCHMARK_ORDER, range: BENCHMARK_COLORS },
                 legend: { title: "Benchmark" }
+            },
+            opacity: {
+                condition: {
+                    test: "hl == null || ((hl.dimVal == null || datum.dimension_value === hl.dimVal) && (hl.colorField !== 'Benchmark_Status' || datum.Benchmark_Status === hl.colorVal))",
+                    value: 1
+                },
+                value: DIMMED_OPACITY
             },
             tooltip: [
                 { field: "dimension_value", title: "Waarde" },

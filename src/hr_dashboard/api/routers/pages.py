@@ -1,5 +1,6 @@
 import json
 from datetime import date
+from decimal import Decimal
 
 from fastapi import APIRouter, Query, Request
 from fastapi.templating import Jinja2Templates
@@ -14,6 +15,15 @@ templates = Jinja2Templates(directory="src/hr_dashboard/templates")
 def _json_default(value):
     if isinstance(value, date):
         return value.isoformat()
+    if isinstance(value, Decimal):
+        # pyodbc returns SQL DECIMAL columns (e.g. Benchmark_Ratio) as
+        # Decimal, which json.dumps can't serialize natively. Falling
+        # through to str(value) here would silently turn it into a JSON
+        # string ("0.82...") instead of a number — fine for server-rendered
+        # Jinja text, but breaks any client-side arithmetic on it (the
+        # click-to-highlight KPI recompute in salaris.html does exactly
+        # that on Benchmark_Ratio).
+        return float(value)
     return str(value)
 
 
@@ -43,11 +53,6 @@ def salaris_page(
     opleidingsniveau: str | None = Query(default=None),
     salaris_categorie: str | None = Query(default=None),
     bron: str | None = Query(default=None),
-    # Click-to-cross-filter fields — set only by clicking a bar segment in a
-    # chart (salaris.html), never by a filter-rail <select>.
-    benchmark_status: str | None = Query(default=None),
-    performance: str | None = Query(default=None),
-    tevredenheid: str | None = Query(default=None),
 ):
     if dimension not in salary.DIMENSION_COLUMNS:
         dimension = "afdeling"
@@ -60,13 +65,10 @@ def salaris_page(
         opleidingsniveau=_none_if_blank(opleidingsniveau),
         salaris_categorie=_none_if_blank(salaris_categorie),
         bron=_none_if_blank(bron),
-        benchmark_status=_none_if_blank(benchmark_status),
-        performance=_none_if_blank(performance),
-        tevredenheid=_none_if_blank(tevredenheid),
     )
 
     kpis = salary.get_salary_kpis(peildatum, filters)
-    distribution = salary.get_salary_distribution(peildatum, filters)
+    employee_rows = salary.get_employee_rows(peildatum, filters)
     headcount_by_dimension = salary.get_headcount_by_dimension(peildatum, dimension, filters)
     benchmark_by_dimension = salary.get_benchmark_distribution_by_dimension(
         peildatum, dimension, filters
@@ -85,14 +87,6 @@ def salaris_page(
         params = {**current_params, "dimension": key}
         dimension_urls[key] = "/salaris?" + "&".join(f"{k}={v}" for k, v in params.items() if v)
 
-    # A link that clears only the click-to-cross-filter fields, keeping
-    # everything else (rail filters, peildatum, dimension) as-is.
-    cross_filter_keys = {"benchmark_status", "performance", "tevredenheid"}
-    cleared_params = {k: v for k, v in current_params.items() if k not in cross_filter_keys}
-    cross_filter_clear_url = "/salaris?" + "&".join(
-        f"{k}={v}" for k, v in cleared_params.items() if v
-    )
-
     return templates.TemplateResponse(
         request,
         "salaris.html",
@@ -104,9 +98,8 @@ def salaris_page(
             "dimension": dimension,
             "dimension_options": salary.DIMENSION_LABELS,
             "dimension_urls": dimension_urls,
-            "cross_filter_clear_url": cross_filter_clear_url,
             "by_dimension_title": salary.DIMENSION_LABELS[dimension],
-            "distribution_json": json.dumps(distribution, default=_json_default),
+            "employee_rows_json": json.dumps(employee_rows, default=_json_default),
             "headcount_by_dimension_json": json.dumps(
                 headcount_by_dimension, default=_json_default
             ),
@@ -114,5 +107,10 @@ def salaris_page(
                 benchmark_by_dimension, default=_json_default
             ),
             "lfl_trend_json": json.dumps(lfl_trend, default=_json_default),
+            # So the client-side highlight/KPI recompute knows which raw
+            # employee-row field the current dimension switcher corresponds
+            # to (e.g. "manager" -> "Manager_Naam") without duplicating
+            # DIMENSION_COLUMNS by hand in JS.
+            "dimension_columns_json": json.dumps(salary.DIMENSION_COLUMNS),
         },
     )

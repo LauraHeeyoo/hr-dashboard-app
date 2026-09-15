@@ -94,14 +94,8 @@ BENCHMARK_STATUS_ORDER: list[str] = [
 
 @dataclass
 class SalaryFilters:
-    """The Salaris page's filters — every field defaults to "no filter"
-    (None), matching the old report's "All" slicer state.
-
-    The first six have their own filter-rail dropdown. The last three
-    (benchmark_status, performance, tevredenheid) don't — they're set only
-    by clicking a bar segment in a chart (a cross-filter, ARCHITECTURE.md —
-    Laura: clicking Cornelia's "Rond benchmark" segment should narrow the
-    whole page the same way an explicit filter selection does)."""
+    """The Salaris page's filter rail — every field defaults to "no filter"
+    (None), matching the old report's "All" slicer state."""
 
     afdeling: str | None = None
     functie: str | None = None
@@ -109,9 +103,6 @@ class SalaryFilters:
     opleidingsniveau: str | None = None
     salaris_categorie: str | None = None
     bron: str | None = None
-    benchmark_status: str | None = None
-    performance: str | None = None
-    tevredenheid: str | None = None
 
     def as_sql_params(self) -> tuple:
         # Order must match mcp.fn_workforce_snapshot_asof's parameter order
@@ -123,19 +114,16 @@ class SalaryFilters:
             self.opleidingsniveau,
             self.salaris_categorie,
             self.bron,
-            self.benchmark_status,
-            self.performance,
-            self.tevredenheid,
         )
 
     def is_empty(self) -> bool:
         return all(getattr(self, f.name) is None for f in fields(self))
 
 
-# mcp.fn_workforce_snapshot_asof(@as_of_date, then 9 filter params) — used
+# mcp.fn_workforce_snapshot_asof(@as_of_date, then 6 filter params) — used
 # everywhere the function is called from Python, so the placeholder count
 # only needs updating in one place if the function ever gains another param.
-_ASOF_PARAM_PLACEHOLDERS = "?, " * 9 + "?"
+_ASOF_PARAM_PLACEHOLDERS = "?, " * 6 + "?"
 
 
 def _rows_as_dicts(cursor) -> list[dict]:
@@ -244,17 +232,28 @@ def _relabel_salaris_categorie(rows: list[dict]) -> list[dict]:
     return rows
 
 
-def get_salary_distribution(as_of_date: date, filters: SalaryFilters) -> list[dict]:
-    """One row per employee: Salaris + Salaris_Categorie.
+_EMPLOYEE_ROW_COLUMNS = (
+    "Employee_Key, Salaris, Salaris_Categorie, Benchmark_Ratio, Benchmark_Status, "
+    "Afdeling_Naam, Manager_Naam, Functie_Naam, Performance_Bin, Tevredenheidsband_Naam"
+)
 
-    Binning happens client-side (Vega-Lite's own `bin` transform) — the same
-    approach used in the Vega-Lite/Plotly comparison artifact, so the chart
-    spec, not this query, owns bin width.
+
+def get_employee_rows(as_of_date: date, filters: SalaryFilters) -> list[dict]:
+    """One row per employee, rail-filtered only — every field a chart or a
+    click-to-highlight computation might need.
+
+    Two jobs: (1) Spreiding salaris bins Salaris client-side (Vega-Lite's
+    own `bin` transform, the same approach used in the Vega-Lite/Plotly
+    comparison artifact, so the chart spec owns bin width, not this query);
+    (2) salaris.html reuses this same array to recompute the KPI tiles for
+    whatever's currently highlighted, entirely client-side (no server round
+    trip per click — ARCHITECTURE.md, the connection-per-request cost is
+    real and a click-triggered reload was the reason it felt slow).
     """
     params = (as_of_date, *filters.as_sql_params())
     with get_connection() as conn:
         cur = conn.cursor()
-        cur.execute(_snapshot_asof_sql("Employee_Key, Salaris, Salaris_Categorie"), params)
+        cur.execute(_snapshot_asof_sql(_EMPLOYEE_ROW_COLUMNS), params)
         return _relabel_salaris_categorie(_rows_as_dicts(cur))
 
 
