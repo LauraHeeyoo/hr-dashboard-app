@@ -34,6 +34,32 @@ def test_salary_kpis_afdeling_filter_narrows_results():
     assert 0 < filtered.aantal_medewerkers < unfiltered.aantal_medewerkers
 
 
+def test_salary_kpis_benchmark_status_filter_narrows_results():
+    """The click-to-cross-filter fields (no rail dropdown of their own)
+    narrow results exactly like the rail's own filters do."""
+    unfiltered = salary.get_salary_kpis(AS_OF, NO_FILTERS)
+    filtered = salary.get_salary_kpis(AS_OF, SalaryFilters(benchmark_status="Rond benchmark"))
+    assert 0 < filtered.aantal_medewerkers < unfiltered.aantal_medewerkers
+
+
+def test_salary_kpis_performance_and_tevredenheid_filters_narrow_results():
+    unfiltered = salary.get_salary_kpis(AS_OF, NO_FILTERS)
+    by_performance = salary.get_salary_kpis(AS_OF, SalaryFilters(performance="4.5 - 5.0"))
+    assert 0 < by_performance.aantal_medewerkers < unfiltered.aantal_medewerkers
+    by_tevredenheid = salary.get_salary_kpis(AS_OF, SalaryFilters(tevredenheid="Laag"))
+    assert 0 < by_tevredenheid.aantal_medewerkers < unfiltered.aantal_medewerkers
+
+
+def test_salary_kpis_cross_filters_combine_with_rail_filters():
+    """A chart-click cross-filter (benchmark_status) combines with (AND) an
+    existing rail filter (afdeling) rather than replacing it."""
+    afdeling_only = salary.get_salary_kpis(AS_OF, SalaryFilters(afdeling="Productie"))
+    combined = salary.get_salary_kpis(
+        AS_OF, SalaryFilters(afdeling="Productie", benchmark_status="Rond benchmark")
+    )
+    assert 0 < combined.aantal_medewerkers < afdeling_only.aantal_medewerkers
+
+
 def test_salary_distribution_uses_qualitative_salary_labels():
     """Spreiding salaris colors by the old PBIP's own numbered salary-band
     names ("1. Laag" ...), like the "Aantal medewerkers" combi-chart —

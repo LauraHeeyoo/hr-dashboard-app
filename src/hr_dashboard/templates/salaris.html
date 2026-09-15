@@ -73,6 +73,9 @@
                 </select>
             </div>
             <input type="hidden" name="dimension" value="{{ dimension }}">
+            <input type="hidden" name="benchmark_status" value="{{ filters.benchmark_status or '' }}">
+            <input type="hidden" name="performance" value="{{ filters.performance or '' }}">
+            <input type="hidden" name="tevredenheid" value="{{ filters.tevredenheid or '' }}">
             <div class="filter-actions">
                 <button type="submit" class="btn btn-primary">Toepassen</button>
                 <a href="/salaris" class="btn btn-secondary">Wissen</a>
@@ -81,6 +84,16 @@
     </aside>
 
     <div class="page-content">
+        {% if filters.benchmark_status or filters.performance or filters.tevredenheid %}
+        <div class="cross-filter-banner">
+            <span>Grafiekfilter actief:</span>
+            {% if filters.benchmark_status %}<span class="cross-filter-chip">Benchmark: {{ filters.benchmark_status }}</span>{% endif %}
+            {% if filters.performance %}<span class="cross-filter-chip">Performance: {{ filters.performance }}</span>{% endif %}
+            {% if filters.tevredenheid %}<span class="cross-filter-chip">Tevredenheid: {{ filters.tevredenheid }}</span>{% endif %}
+            <a href="{{ cross_filter_clear_url }}" class="cross-filter-clear">Wissen</a>
+        </div>
+        {% endif %}
+
         <section class="kpi-row">
             <div class="kpi-card">
                 <div class="kpi-value">
@@ -158,6 +171,62 @@ const headcountByDimensionData = {{ headcount_by_dimension_json | safe }};
 const benchmarkByDimensionData = {{ benchmark_by_dimension_json | safe }};
 const lflTrendData = {{ lfl_trend_json | safe }};
 
+// The dimension currently selected in the switcher — also the name of the
+// filter query param that a click's "dimension_value" belongs to, since
+// DIMENSION_COLUMNS' keys in salary.py (afdeling/manager/functie/
+// performance/tevredenheid) double as SalaryFilters field names.
+const currentDimension = "{{ dimension }}";
+
+// Reverse of salary.py's SALARY_CATEGORY_DISPLAY: a click on a qualitative
+// label ("1. Laag") needs to become the raw currency-range value the
+// salaris_categorie filter (and its rail dropdown) actually uses.
+const SALARY_CATEGORY_RAW = {
+    "1. Laag": "Onder EUR 35.000",
+    "2. Ondergemiddeld": "EUR 35.000 - 44.999",
+    "3. Gemiddeld": "EUR 45.000 - 59.999",
+    "4. Bovengemiddeld": "EUR 60.000 - 79.999",
+    "5. Hoog": "EUR 80.000 - 99.999",
+    "6. Extreem hoog": "EUR 100.000 en hoger"
+};
+
+// Click-to-cross-filter: clicking a bar (segment) applies its category as
+// an extra filter, combined with (AND) whatever's already selected —
+// clicking the very same value again clears just that one field (a
+// toggle), same as Power BI's click-to-select-then-click-to-deselect.
+// The whole page re-renders via a normal navigation, so every visual
+// (KPIs included) reflects the new filter combination, not just a visual
+// highlight — ARCHITECTURE.md, Laura's cross-filter request.
+function applyCrossFilterFromClick(fields) {
+    const params = new URLSearchParams(window.location.search);
+    for (const [key, value] of Object.entries(fields)) {
+        if (value === undefined || value === null) continue;
+        if (params.get(key) === String(value)) {
+            params.delete(key);
+        } else {
+            params.set(key, value);
+        }
+    }
+    window.location.search = params.toString();
+}
+
+function wireClickToFilter(viewPromise, { dimensionField, colorField, colorRawMap }) {
+    viewPromise.then((result) => {
+        result.view.addEventListener("click", (event, item) => {
+            if (!item || !item.datum) return;
+            const fields = {};
+            if (dimensionField && item.datum[dimensionField] !== undefined) {
+                fields[currentDimension] = item.datum[dimensionField];
+            }
+            if (colorField && item.datum[colorField] !== undefined) {
+                const raw = item.datum[colorField];
+                fields[colorField === "Salaris_Categorie" ? "salaris_categorie" : "benchmark_status"] =
+                    colorRawMap ? (colorRawMap[raw] || raw) : raw;
+            }
+            if (Object.keys(fields).length > 0) applyCrossFilterFromClick(fields);
+        });
+    });
+}
+
 // Salary bands, labeled with the old PBIP's own numbered, qualitative
 // names (dim_salary_band's DAX column 'Salaris categorie' — salary.py's
 // SALARY_CATEGORY_DISPLAY already relabeled the underlying data server-
@@ -183,66 +252,75 @@ const baseConfig = {
     view: { stroke: null }
 };
 
-vegaEmbed("#chart-distribution", {
-    $schema: "https://vega.github.io/schema/vega-lite/v6.json",
-    width: "container", height: 260,
-    data: { values: distributionData },
-    mark: { type: "bar", cornerRadiusTopLeft: 3, cornerRadiusTopRight: 3 },
-    encoding: {
-        x: { bin: { step: 5000 }, field: "Salaris", type: "quantitative", title: "Salaris (€)" },
-        y: { aggregate: "count", type: "quantitative", title: "Aantal medewerkers" },
-        color: {
-            field: "Salaris_Categorie", type: "nominal", sort: CATEGORY_ORDER,
-            scale: { domain: CATEGORY_ORDER, range: CATEGORY_COLORS },
-            legend: { title: "Salaris categorie" }
+wireClickToFilter(
+    vegaEmbed("#chart-distribution", {
+        $schema: "https://vega.github.io/schema/vega-lite/v6.json",
+        width: "container", height: 260,
+        data: { values: distributionData },
+        mark: { type: "bar", cornerRadiusTopLeft: 3, cornerRadiusTopRight: 3, cursor: "pointer" },
+        encoding: {
+            x: { bin: { step: 5000 }, field: "Salaris", type: "quantitative", title: "Salaris (€)" },
+            y: { aggregate: "count", type: "quantitative", title: "Aantal medewerkers" },
+            color: {
+                field: "Salaris_Categorie", type: "nominal", sort: CATEGORY_ORDER,
+                scale: { domain: CATEGORY_ORDER, range: CATEGORY_COLORS },
+                legend: { title: "Salaris categorie" }
+            },
+            tooltip: [{ field: "Salaris_Categorie", title: "Categorie" }, { aggregate: "count", title: "Aantal" }]
         },
-        tooltip: [{ field: "Salaris_Categorie", title: "Categorie" }, { aggregate: "count", title: "Aantal" }]
-    },
-    config: baseConfig
-}, { actions: false });
+        config: baseConfig
+    }, { actions: false }),
+    { colorField: "Salaris_Categorie", colorRawMap: SALARY_CATEGORY_RAW }
+);
 
-vegaEmbed("#chart-headcount", {
-    $schema: "https://vega.github.io/schema/vega-lite/v6.json",
-    width: "container", height: { step: 22 },
-    data: { values: headcountByDimensionData },
-    mark: "bar",
-    encoding: {
-        y: { field: "dimension_value", type: "nominal", sort: "-x", title: null },
-        x: { field: "aantal", type: "quantitative", aggregate: "sum", title: "Aantal medewerkers" },
-        color: {
-            field: "Salaris_Categorie", type: "nominal", sort: CATEGORY_ORDER,
-            scale: { domain: CATEGORY_ORDER, range: CATEGORY_COLORS },
-            legend: { title: "Salaris categorie" }
+wireClickToFilter(
+    vegaEmbed("#chart-headcount", {
+        $schema: "https://vega.github.io/schema/vega-lite/v6.json",
+        width: "container", height: { step: 22 },
+        data: { values: headcountByDimensionData },
+        mark: { type: "bar", cursor: "pointer" },
+        encoding: {
+            y: { field: "dimension_value", type: "nominal", sort: "-x", title: null },
+            x: { field: "aantal", type: "quantitative", aggregate: "sum", title: "Aantal medewerkers" },
+            color: {
+                field: "Salaris_Categorie", type: "nominal", sort: CATEGORY_ORDER,
+                scale: { domain: CATEGORY_ORDER, range: CATEGORY_COLORS },
+                legend: { title: "Salaris categorie" }
+            },
+            tooltip: [{ field: "dimension_value", title: "Waarde" }, { field: "Salaris_Categorie", title: "Categorie" }, { field: "aantal", aggregate: "sum", title: "Aantal" }]
         },
-        tooltip: [{ field: "dimension_value", title: "Waarde" }, { field: "Salaris_Categorie", title: "Categorie" }, { field: "aantal", aggregate: "sum", title: "Aantal" }]
-    },
-    config: baseConfig
-}, { actions: false });
+        config: baseConfig
+    }, { actions: false }),
+    { dimensionField: "dimension_value", colorField: "Salaris_Categorie", colorRawMap: SALARY_CATEGORY_RAW }
+);
 
-vegaEmbed("#chart-benchmark", {
-    $schema: "https://vega.github.io/schema/vega-lite/v6.json",
-    width: "container", height: { step: 22 },
-    data: { values: benchmarkByDimensionData },
-    mark: "bar",
-    encoding: {
-        y: { field: "dimension_value", type: "nominal", sort: "-x", title: null },
-        x: {
-            field: "aantal", type: "quantitative", aggregate: "sum", stack: "normalize",
-            title: "Aandeel medewerkers", axis: { format: "%" }
+wireClickToFilter(
+    vegaEmbed("#chart-benchmark", {
+        $schema: "https://vega.github.io/schema/vega-lite/v6.json",
+        width: "container", height: { step: 22 },
+        data: { values: benchmarkByDimensionData },
+        mark: { type: "bar", cursor: "pointer" },
+        encoding: {
+            y: { field: "dimension_value", type: "nominal", sort: "-x", title: null },
+            x: {
+                field: "aantal", type: "quantitative", aggregate: "sum", stack: "normalize",
+                title: "Aandeel medewerkers", axis: { format: "%" }
+            },
+            color: {
+                field: "Benchmark_Status", type: "nominal", sort: BENCHMARK_ORDER,
+                scale: { domain: BENCHMARK_ORDER, range: BENCHMARK_COLORS },
+                legend: { title: "Benchmark" }
+            },
+            tooltip: [
+                { field: "dimension_value", title: "Waarde" },
+                { field: "Benchmark_Status", title: "Benchmark" },
+                { field: "aantal", aggregate: "sum", title: "Aantal" }
+            ]
         },
-        color: {
-            field: "Benchmark_Status", type: "nominal", sort: BENCHMARK_ORDER,
-            scale: { domain: BENCHMARK_ORDER, range: BENCHMARK_COLORS },
-            legend: { title: "Benchmark" }
-        },
-        tooltip: [
-            { field: "dimension_value", title: "Waarde" },
-            { field: "Benchmark_Status", title: "Benchmark" },
-            { field: "aantal", aggregate: "sum", title: "Aantal" }
-        ]
-    },
-    config: baseConfig
-}, { actions: false });
+        config: baseConfig
+    }, { actions: false }),
+    { dimensionField: "dimension_value", colorField: "Benchmark_Status" }
+);
 
 vegaEmbed("#chart-lfl", {
     $schema: "https://vega.github.io/schema/vega-lite/v6.json",

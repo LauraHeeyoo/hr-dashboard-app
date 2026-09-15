@@ -43,6 +43,11 @@ def salaris_page(
     opleidingsniveau: str | None = Query(default=None),
     salaris_categorie: str | None = Query(default=None),
     bron: str | None = Query(default=None),
+    # Click-to-cross-filter fields — set only by clicking a bar segment in a
+    # chart (salaris.html), never by a filter-rail <select>.
+    benchmark_status: str | None = Query(default=None),
+    performance: str | None = Query(default=None),
+    tevredenheid: str | None = Query(default=None),
 ):
     if dimension not in salary.DIMENSION_COLUMNS:
         dimension = "afdeling"
@@ -55,6 +60,9 @@ def salaris_page(
         opleidingsniveau=_none_if_blank(opleidingsniveau),
         salaris_categorie=_none_if_blank(salaris_categorie),
         bron=_none_if_blank(bron),
+        benchmark_status=_none_if_blank(benchmark_status),
+        performance=_none_if_blank(performance),
+        tevredenheid=_none_if_blank(tevredenheid),
     )
 
     kpis = salary.get_salary_kpis(peildatum, filters)
@@ -77,6 +85,14 @@ def salaris_page(
         params = {**current_params, "dimension": key}
         dimension_urls[key] = "/salaris?" + "&".join(f"{k}={v}" for k, v in params.items() if v)
 
+    # A link that clears only the click-to-cross-filter fields, keeping
+    # everything else (rail filters, peildatum, dimension) as-is.
+    cross_filter_keys = {"benchmark_status", "performance", "tevredenheid"}
+    cleared_params = {k: v for k, v in current_params.items() if k not in cross_filter_keys}
+    cross_filter_clear_url = "/salaris?" + "&".join(
+        f"{k}={v}" for k, v in cleared_params.items() if v
+    )
+
     return templates.TemplateResponse(
         request,
         "salaris.html",
@@ -88,6 +104,7 @@ def salaris_page(
             "dimension": dimension,
             "dimension_options": salary.DIMENSION_LABELS,
             "dimension_urls": dimension_urls,
+            "cross_filter_clear_url": cross_filter_clear_url,
             "by_dimension_title": salary.DIMENSION_LABELS[dimension],
             "distribution_json": json.dumps(distribution, default=_json_default),
             "headcount_by_dimension_json": json.dumps(

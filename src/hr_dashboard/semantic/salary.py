@@ -94,8 +94,14 @@ BENCHMARK_STATUS_ORDER: list[str] = [
 
 @dataclass
 class SalaryFilters:
-    """The Salaris page's filter rail — every field defaults to "no filter"
-    (None), matching the old report's "All" slicer state."""
+    """The Salaris page's filters — every field defaults to "no filter"
+    (None), matching the old report's "All" slicer state.
+
+    The first six have their own filter-rail dropdown. The last three
+    (benchmark_status, performance, tevredenheid) don't — they're set only
+    by clicking a bar segment in a chart (a cross-filter, ARCHITECTURE.md —
+    Laura: clicking Cornelia's "Rond benchmark" segment should narrow the
+    whole page the same way an explicit filter selection does)."""
 
     afdeling: str | None = None
     functie: str | None = None
@@ -103,6 +109,9 @@ class SalaryFilters:
     opleidingsniveau: str | None = None
     salaris_categorie: str | None = None
     bron: str | None = None
+    benchmark_status: str | None = None
+    performance: str | None = None
+    tevredenheid: str | None = None
 
     def as_sql_params(self) -> tuple:
         # Order must match mcp.fn_workforce_snapshot_asof's parameter order
@@ -114,10 +123,19 @@ class SalaryFilters:
             self.opleidingsniveau,
             self.salaris_categorie,
             self.bron,
+            self.benchmark_status,
+            self.performance,
+            self.tevredenheid,
         )
 
     def is_empty(self) -> bool:
         return all(getattr(self, f.name) is None for f in fields(self))
+
+
+# mcp.fn_workforce_snapshot_asof(@as_of_date, then 9 filter params) — used
+# everywhere the function is called from Python, so the placeholder count
+# only needs updating in one place if the function ever gains another param.
+_ASOF_PARAM_PLACEHOLDERS = "?, " * 9 + "?"
 
 
 def _rows_as_dicts(cursor) -> list[dict]:
@@ -128,7 +146,7 @@ def _rows_as_dicts(cursor) -> list[dict]:
 def _snapshot_asof_sql(select_clause: str) -> str:
     return (
         f"SELECT {select_clause} "
-        "FROM mcp.fn_workforce_snapshot_asof(?, ?, ?, ?, ?, ?, ?)"
+        f"FROM mcp.fn_workforce_snapshot_asof({_ASOF_PARAM_PLACEHOLDERS})"
     )
 
 
@@ -167,7 +185,7 @@ def get_filter_options(as_of_date: date, filters: SalaryFilters) -> dict[str, li
             cur.execute(
                 f"""
                 SELECT DISTINCT {column}
-                FROM mcp.fn_workforce_snapshot_asof(?, ?, ?, ?, ?, ?, ?)
+                FROM mcp.fn_workforce_snapshot_asof({_ASOF_PARAM_PLACEHOLDERS})
                 WHERE {column} IS NOT NULL
                 """,
                 params,
@@ -198,12 +216,12 @@ def get_salary_kpis(as_of_date: date, filters: SalaryFilters) -> SalaryKpis:
         median_salaris = median_row[0] if median_row else None
 
         cur.execute(
-            """
+            f"""
             SELECT
                 AVG(Benchmark_Ratio) AS gemiddeld_benchmark_ratio,
                 AVG(CASE WHEN Benchmark_Ratio < 1.0 THEN 1.0 ELSE 0.0 END) AS pct_onder_benchmark,
                 COUNT(*) AS aantal_medewerkers
-            FROM mcp.fn_workforce_snapshot_asof(?, ?, ?, ?, ?, ?, ?)
+            FROM mcp.fn_workforce_snapshot_asof({_ASOF_PARAM_PLACEHOLDERS})
             """,
             params,
         )
@@ -264,7 +282,7 @@ def get_headcount_by_dimension(
         cur.execute(
             f"""
             SELECT {column} AS dimension_value, Salaris_Categorie, COUNT(*) AS aantal
-            FROM mcp.fn_workforce_snapshot_asof(?, ?, ?, ?, ?, ?, ?)
+            FROM mcp.fn_workforce_snapshot_asof({_ASOF_PARAM_PLACEHOLDERS})
             WHERE {column} IS NOT NULL
             GROUP BY {column}, Salaris_Categorie
             """,
@@ -287,7 +305,7 @@ def get_benchmark_distribution_by_dimension(
         cur.execute(
             f"""
             SELECT {column} AS dimension_value, Benchmark_Status, COUNT(*) AS aantal
-            FROM mcp.fn_workforce_snapshot_asof(?, ?, ?, ?, ?, ?, ?)
+            FROM mcp.fn_workforce_snapshot_asof({_ASOF_PARAM_PLACEHOLDERS})
             WHERE {column} IS NOT NULL AND Benchmark_Status IS NOT NULL
             GROUP BY {column}, Benchmark_Status
             """,
