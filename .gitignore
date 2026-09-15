@@ -1,0 +1,16 @@
+# Terraform
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+crash.*.log
+*.tfvars
+*.tfvars.json
+
+# .terraform.lock.hcl is deliberately NOT ignored — it pins exact provider
+# versions/checksums and must be committed, the same way a lockfile for any
+# other package manager would be.
+
+# Local dev secrets (already in use this session, e.g. HR Dashboard app/.env)
+.env
