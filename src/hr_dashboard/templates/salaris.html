@@ -164,6 +164,14 @@ const CATEGORY_ORDER = [
 ];
 const CATEGORY_COLORS = ["#2a78d6", "#1baf7a", "#10bdc6", "#eda100", "#eb6834", "#e34948"];
 
+// The "Aantal medewerkers" chart relabels the same bands with the old
+// PBIP's numbered names (salary.py — SALARY_CATEGORY_DISPLAY); same order
+// and colors as CATEGORY_ORDER/COLORS, just different labels.
+const HEADCOUNT_CATEGORY_ORDER = [
+    "1. Laag", "2. Ondergemiddeld", "3. Gemiddeld",
+    "4. Bovengemiddeld", "5. Hoog", "6. Extreem hoog"
+];
+
 // Must stay in sync with BENCHMARK_STATUS_ORDER in salary.py.
 const BENCHMARK_ORDER = [
     "Ver onder benchmark", "Onder benchmark", "Rond benchmark",
@@ -199,16 +207,16 @@ vegaEmbed("#chart-distribution", {
 
 vegaEmbed("#chart-headcount", {
     $schema: "https://vega.github.io/schema/vega-lite/v6.json",
-    width: { step: 28 }, height: 260,
+    width: "container", height: { step: 22 },
     data: { values: headcountByDimensionData },
     mark: "bar",
     encoding: {
-        x: { field: "dimension_value", type: "nominal", sort: "-y", title: null, axis: { labelAngle: -40 } },
-        y: { field: "aantal", type: "quantitative", aggregate: "sum", title: "Aantal medewerkers" },
+        y: { field: "dimension_value", type: "nominal", sort: "-x", title: null },
+        x: { field: "aantal", type: "quantitative", aggregate: "sum", title: "Aantal medewerkers" },
         color: {
-            field: "Salaris_Categorie", type: "nominal", sort: CATEGORY_ORDER,
-            scale: { domain: CATEGORY_ORDER, range: CATEGORY_COLORS },
-            legend: { title: "Categorie" }
+            field: "Salaris_Categorie", type: "nominal", sort: HEADCOUNT_CATEGORY_ORDER,
+            scale: { domain: HEADCOUNT_CATEGORY_ORDER, range: CATEGORY_COLORS },
+            legend: { title: "Salaris categorie" }
         },
         tooltip: [{ field: "dimension_value", title: "Waarde" }, { field: "Salaris_Categorie", title: "Categorie" }, { field: "aantal", aggregate: "sum", title: "Aantal" }]
     },
@@ -217,18 +225,25 @@ vegaEmbed("#chart-headcount", {
 
 vegaEmbed("#chart-benchmark", {
     $schema: "https://vega.github.io/schema/vega-lite/v6.json",
-    width: { step: 28 }, height: 260,
+    width: "container", height: { step: 22 },
     data: { values: benchmarkByDimensionData },
     mark: "bar",
     encoding: {
-        x: { field: "dimension_value", type: "nominal", sort: "-y", title: null, axis: { labelAngle: -40 } },
-        y: { field: "aantal", type: "quantitative", aggregate: "sum", title: "Aantal medewerkers" },
+        y: { field: "dimension_value", type: "nominal", sort: "-x", title: null },
+        x: {
+            field: "aantal", type: "quantitative", aggregate: "sum", stack: "normalize",
+            title: "Aandeel medewerkers", axis: { format: "%" }
+        },
         color: {
             field: "Benchmark_Status", type: "nominal", sort: BENCHMARK_ORDER,
             scale: { domain: BENCHMARK_ORDER, range: BENCHMARK_COLORS },
             legend: { title: "Benchmark" }
         },
-        tooltip: [{ field: "dimension_value", title: "Waarde" }, { field: "Benchmark_Status", title: "Benchmark" }, { field: "aantal", aggregate: "sum", title: "Aantal" }]
+        tooltip: [
+            { field: "dimension_value", title: "Waarde" },
+            { field: "Benchmark_Status", title: "Benchmark" },
+            { field: "aantal", aggregate: "sum", title: "Aantal" }
+        ]
     },
     config: baseConfig
 }, { actions: false });

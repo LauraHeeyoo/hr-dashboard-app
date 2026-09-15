@@ -59,6 +59,15 @@ def test_headcount_by_dimension_known_dimensions_return_rows():
         assert len(rows) > 0, f"no rows for dimension {dim!r}"
 
 
+def test_headcount_by_dimension_uses_qualitative_salary_labels():
+    """The old PBIP's 'Aantal medewerkers' chart colors by its own numbered
+    salary-band names ("1. Laag" ...), not the currency-range names used
+    elsewhere (Spreiding salaris, the Salarisgroep filter)."""
+    rows = salary.get_headcount_by_dimension(AS_OF, "afdeling", NO_FILTERS)
+    seen = {r["Salaris_Categorie"] for r in rows}
+    assert seen <= set(salary.SALARY_CATEGORY_DISPLAY.values())
+
+
 def test_benchmark_distribution_by_dimension_rejects_unknown_dimension():
     try:
         salary.get_benchmark_distribution_by_dimension(AS_OF, "not_a_real_dimension", NO_FILTERS)

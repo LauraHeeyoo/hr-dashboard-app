@@ -66,6 +66,23 @@ SALARY_CATEGORY_ORDER: list[str] = [
     "EUR 60.000 - 79.999", "EUR 80.000 - 99.999", "EUR 100.000 en hoger",
 ]
 
+# The "Aantal medewerkers" combi-chart relabels the same salary bands with
+# the old PBIP's own numbered, qualitative names (dim_salary_band's DAX
+# calculated column 'Salaris categorie') instead of the currency-range
+# names used everywhere else in this app (Spreiding salaris, the
+# Salarisgroep filter) — deliberately not applied globally, only there.
+SALARY_CATEGORY_DISPLAY: dict[str, str] = {
+    "Onder EUR 35.000": "1. Laag",
+    "EUR 35.000 - 44.999": "2. Ondergemiddeld",
+    "EUR 45.000 - 59.999": "3. Gemiddeld",
+    "EUR 60.000 - 79.999": "4. Bovengemiddeld",
+    "EUR 80.000 - 99.999": "5. Hoog",
+    "EUR 100.000 en hoger": "6. Extreem hoog",
+}
+SALARY_CATEGORY_DISPLAY_ORDER: list[str] = [
+    SALARY_CATEGORY_DISPLAY[key] for key in SALARY_CATEGORY_ORDER
+]
+
 # Must stay in sync with BENCHMARK_ORDER in salaris.html — mirrors the old
 # PBIP's `Benchmark groepen` calculated column (fact_workforce_snapshot),
 # which prefixes Benchmark_Status with its rank for the same reason.
@@ -226,7 +243,9 @@ def get_headcount_by_dimension(
     as_of_date: date, dimension: str, filters: SalaryFilters
 ) -> list[dict]:
     """Headcount by Salaris_Categorie, grouped by an approved dimension —
-    the old PBIP's "Aantal medewerkers" chart."""
+    the old PBIP's "Aantal medewerkers" chart. Colored by the qualitative,
+    numbered salary-band labels (SALARY_CATEGORY_DISPLAY), matching that
+    chart specifically — not the currency-range labels used elsewhere."""
     column = _validate_dimension(dimension)
     params = (as_of_date, *filters.as_sql_params())
 
@@ -241,7 +260,12 @@ def get_headcount_by_dimension(
             """,
             params,
         )
-        return _rows_as_dicts(cur)
+        rows = _rows_as_dicts(cur)
+        for row in rows:
+            row["Salaris_Categorie"] = SALARY_CATEGORY_DISPLAY.get(
+                row["Salaris_Categorie"], row["Salaris_Categorie"]
+            )
+        return rows
 
 
 def get_benchmark_distribution_by_dimension(
