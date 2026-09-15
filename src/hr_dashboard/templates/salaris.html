@@ -107,14 +107,11 @@
         </section>
 
         <section class="chart-row">
-            <div class="chart-card chart-card-wide">
+            <div class="chart-card">
                 <h2>Spreiding salaris</h2>
                 <div id="chart-distribution"></div>
             </div>
-        </section>
-
-        <section class="chart-row">
-            <div class="chart-card chart-card-wide">
+            <div class="chart-card chart-card-fit">
                 <h2>Verdeling salaris t.o.v. benchmark, per {{ by_dimension_title|lower }}</h2>
                 <div class="dimension-switcher">
                     {% for key, label in dimension_options.items() %}

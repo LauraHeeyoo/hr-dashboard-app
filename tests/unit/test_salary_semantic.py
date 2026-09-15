@@ -69,9 +69,24 @@ def test_lfl_growth_trend_is_a_small_percentage():
 
 
 def test_get_filter_options_returns_known_afdelingen():
-    options = salary.get_filter_options()
+    options = salary.get_filter_options(AS_OF, NO_FILTERS)
     assert "Productie" in options["afdeling"]
     assert set(options["salaris_categorie"]) == {
         "Onder EUR 35.000", "EUR 35.000 - 44.999", "EUR 45.000 - 59.999",
         "EUR 60.000 - 79.999", "EUR 80.000 - 99.999", "EUR 100.000 en hoger",
     }
+
+
+def test_get_filter_options_cross_filters_by_other_selections():
+    """Selecting Afdeling=Productie should narrow the manager list to
+    managers who actually have Productie employees, not every manager."""
+    all_managers = salary.get_filter_options(AS_OF, NO_FILTERS)["manager"]
+    narrowed = salary.get_filter_options(AS_OF, SalaryFilters(afdeling="Productie"))["manager"]
+    assert 0 < len(narrowed) < len(all_managers)
+
+
+def test_get_filter_options_never_excludes_the_selected_value_itself():
+    """A field's own selection must stay in its own dropdown list, even
+    though it's cleared when computing that field's cross-filtered options."""
+    options = salary.get_filter_options(AS_OF, SalaryFilters(afdeling="Productie"))
+    assert "Productie" in options["afdeling"]

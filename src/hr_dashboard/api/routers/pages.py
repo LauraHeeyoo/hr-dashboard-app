@@ -60,7 +60,7 @@ def salaris_page(
     kpis = salary.get_salary_kpis(peildatum, filters)
     distribution = salary.get_salary_distribution(peildatum, filters)
     by_dimension = salary.get_salary_by_dimension(peildatum, dimension, filters)
-    filter_options = salary.get_filter_options()
+    filter_options = salary.get_filter_options(peildatum, filters)
 
     trend_start = date(peildatum.year - 4, peildatum.month, 1)
     lfl_trend = salary.get_lfl_growth_trend(trend_start, peildatum)

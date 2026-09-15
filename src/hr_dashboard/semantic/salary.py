@@ -14,7 +14,7 @@ the actual SQL identifier always comes from this dict, never from the
 caller's string directly.
 """
 
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, fields, replace
 from datetime import date
 
 from hr_dashboard.db.connection import get_connection
@@ -34,6 +34,27 @@ DIMENSION_LABELS: dict[str, str] = {
     "manager": "Manager",
     "opleidingsniveau": "Opleidingsniveau",
 }
+
+# Every filter-rail field -> the column mcp.fn_workforce_snapshot_asof
+# returns for it. Used to cross-filter each field's own dropdown options
+# by every OTHER currently selected filter (ARCHITECTURE.md — Laura: picking
+# an afdeling shouldn't leave incompatible managers selectable afterwards).
+FILTER_FIELD_COLUMNS: dict[str, str] = {
+    "afdeling": "Afdeling_Naam",
+    "functie": "Functie_Naam",
+    "manager": "Manager_Naam",
+    "opleidingsniveau": "Opleidingsniveau",
+    "salaris_categorie": "Salaris_Categorie",
+    "bron": "Bron_Naam",
+}
+
+# Must stay in sync with CATEGORY_ORDER in salaris.html — the canonical
+# band order, since alphabetical sort would put "EUR 100.000 en hoger"
+# before "EUR 35.000 - 44.999".
+SALARY_CATEGORY_ORDER: list[str] = [
+    "Onder EUR 35.000", "EUR 35.000 - 44.999", "EUR 45.000 - 59.999",
+    "EUR 60.000 - 79.999", "EUR 80.000 - 99.999", "EUR 100.000 en hoger",
+]
 
 
 @dataclass
@@ -93,40 +114,35 @@ def get_latest_snapshot_date() -> date:
         return cur.fetchone()[0]
 
 
-def get_filter_options() -> dict[str, list[str]]:
-    """Option lists for the filter-rail dropdowns. Small, stable reference
-    tables — read directly (ARCHITECTURE.md §7.1's "no view needed" case),
-    not through the as-of function."""
+def get_filter_options(as_of_date: date, filters: SalaryFilters) -> dict[str, list[str]]:
+    """Cross-filtered option lists for the filter-rail dropdowns.
+
+    Each field's own list is computed with that field's filter cleared but
+    every OTHER currently selected filter applied — so picking Afdeling=HR
+    narrows the Manager dropdown to HR's own managers, without a selected
+    value ever making itself vanish from its own list. Six small queries
+    against the as-of function (tiny data volume, ARCHITECTURE.md §11).
+    """
     with get_connection() as conn:
         cur = conn.cursor()
-        queries = {
-            "afdeling": (
-                "SELECT DISTINCT Afdeling_Naam FROM dbo.dim_department "
-                "WHERE Afdeling_Naam IS NOT NULL ORDER BY 1"
-            ),
-            "functie": (
-                "SELECT DISTINCT Functie_Naam FROM dbo.dim_role "
-                "WHERE Functie_Naam IS NOT NULL ORDER BY 1"
-            ),
-            "manager": (
-                "SELECT DISTINCT Voornaam + ' ' + Achternaam FROM dbo.dim_manager ORDER BY 1"
-            ),
-            "opleidingsniveau": (
-                "SELECT DISTINCT Opleidingsniveau FROM dbo.dim_education "
-                "WHERE Opleidingsniveau IS NOT NULL ORDER BY 1"
-            ),
-            "salaris_categorie": (
-                "SELECT Salarisband_Naam FROM dbo.dim_salary_band ORDER BY Minimum_Salaris"
-            ),
-            "bron": (
-                "SELECT DISTINCT Bron_Naam FROM dbo.dim_hire_source "
-                "WHERE Bron_Naam IS NOT NULL ORDER BY 1"
-            ),
-        }
         options = {}
-        for key, query in queries.items():
-            cur.execute(query)
-            options[key] = [r[0] for r in cur.fetchall()]
+        for field, column in FILTER_FIELD_COLUMNS.items():
+            probe_filters = replace(filters, **{field: None})
+            params = (as_of_date, *probe_filters.as_sql_params())
+            cur.execute(
+                f"""
+                SELECT DISTINCT {column}
+                FROM mcp.fn_workforce_snapshot_asof(?, ?, ?, ?, ?, ?, ?)
+                WHERE {column} IS NOT NULL
+                """,
+                params,
+            )
+            values = [r[0] for r in cur.fetchall()]
+            if field == "salaris_categorie":
+                values.sort(key=SALARY_CATEGORY_ORDER.index)
+            else:
+                values.sort()
+            options[field] = values
         return options
 
 
