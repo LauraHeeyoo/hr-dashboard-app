@@ -1,0 +1,213 @@
+{% extends "base.html" %}
+{% block title %}Salaris — HR Dashboard{% endblock %}
+
+{% block head %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/vega/6.4.0/vega.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/vega-lite/6.4.3/vega-lite.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/vega-embed/7.2.0/vega-embed.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<h1 class="page-title">Salaris</h1>
+
+<div class="page-layout">
+    <aside class="filter-rail">
+        <h3>Filters</h3>
+        <form method="get" action="/salaris">
+            <div class="filter-field">
+                <label for="as_of">Peildatum</label>
+                <input type="date" id="as_of" name="as_of" value="{{ peildatum }}">
+            </div>
+            <div class="filter-field">
+                <label for="afdeling">Afdeling</label>
+                <select id="afdeling" name="afdeling">
+                    <option value="">Alle</option>
+                    {% for opt in filter_options.afdeling %}
+                    <option value="{{ opt }}" {% if filters.afdeling == opt %}selected{% endif %}>{{ opt }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="filter-field">
+                <label for="functie">Functie</label>
+                <select id="functie" name="functie">
+                    <option value="">Alle</option>
+                    {% for opt in filter_options.functie %}
+                    <option value="{{ opt }}" {% if filters.functie == opt %}selected{% endif %}>{{ opt }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="filter-field">
+                <label for="manager">Manager</label>
+                <select id="manager" name="manager">
+                    <option value="">Alle</option>
+                    {% for opt in filter_options.manager %}
+                    <option value="{{ opt }}" {% if filters.manager == opt %}selected{% endif %}>{{ opt }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="filter-field">
+                <label for="opleidingsniveau">Opleidingsniveau</label>
+                <select id="opleidingsniveau" name="opleidingsniveau">
+                    <option value="">Alle</option>
+                    {% for opt in filter_options.opleidingsniveau %}
+                    <option value="{{ opt }}" {% if filters.opleidingsniveau == opt %}selected{% endif %}>{{ opt }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="filter-field">
+                <label for="salaris_categorie">Salarisgroep</label>
+                <select id="salaris_categorie" name="salaris_categorie">
+                    <option value="">Alle</option>
+                    {% for opt in filter_options.salaris_categorie %}
+                    <option value="{{ opt }}" {% if filters.salaris_categorie == opt %}selected{% endif %}>{{ opt }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="filter-field">
+                <label for="bron">Recruitment (bron)</label>
+                <select id="bron" name="bron">
+                    <option value="">Alle</option>
+                    {% for opt in filter_options.bron %}
+                    <option value="{{ opt }}" {% if filters.bron == opt %}selected{% endif %}>{{ opt }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <input type="hidden" name="dimension" value="{{ dimension }}">
+            <div class="filter-actions">
+                <button type="submit" class="btn btn-primary">Toepassen</button>
+                <a href="/salaris" class="btn btn-secondary">Wissen</a>
+            </div>
+        </form>
+    </aside>
+
+    <div class="page-content">
+        <section class="kpi-row">
+            <div class="kpi-card">
+                <div class="kpi-value">
+                    {% if kpis.median_salaris %}€{{ "{:,.0f}".format(kpis.median_salaris).replace(",", ".") }}{% else %}—{% endif %}
+                </div>
+                <div class="kpi-label">Mediaan salaris</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-value">
+                    {% if kpis.gemiddeld_benchmark_ratio %}{{ "{:.1f}".format(kpis.gemiddeld_benchmark_ratio * 100) }}%{% else %}—{% endif %}
+                </div>
+                <div class="kpi-label">Gemiddeld t.o.v. benchmark</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-value">
+                    {% if kpis.pct_onder_benchmark %}{{ "{:.1f}".format(kpis.pct_onder_benchmark * 100) }}%{% else %}—{% endif %}
+                </div>
+                <div class="kpi-label">% medewerkers onder benchmark</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-value">{{ kpis.aantal_medewerkers }}</div>
+                <div class="kpi-label">Actieve medewerkers</div>
+            </div>
+        </section>
+
+        <section class="chart-row">
+            <div class="chart-card">
+                <h2>Spreiding salaris</h2>
+                <div id="chart-distribution"></div>
+            </div>
+            <div class="chart-card">
+                <h2>Verdeling salaris t.o.v. benchmark, per {{ by_dimension_title|lower }}</h2>
+                <div class="dimension-switcher">
+                    {% for key, label in dimension_options.items() %}
+                    <a href="{{ dimension_urls[key] }}" class="dimension-pill {% if dimension == key %}active{% endif %}">{{ label }}</a>
+                    {% endfor %}
+                </div>
+                <div id="chart-dimension"></div>
+            </div>
+        </section>
+
+        <section class="chart-row">
+            <div class="chart-card chart-card-wide">
+                <h2>Gemiddelde salarisgroei like-for-like (YoY)</h2>
+                <div id="chart-lfl"></div>
+            </div>
+        </section>
+    </div>
+</div>
+
+<script>
+const distributionData = {{ distribution_json | safe }};
+const byDimensionData = {{ by_dimension_json | safe }};
+const lflTrendData = {{ lfl_trend_json | safe }};
+
+const CATEGORY_ORDER = [
+    "Onder EUR 35.000", "EUR 35.000 - 44.999", "EUR 45.000 - 59.999",
+    "EUR 60.000 - 79.999", "EUR 80.000 - 99.999", "EUR 100.000 en hoger"
+];
+const CATEGORY_COLORS = ["#2a78d6", "#1baf7a", "#10bdc6", "#eda100", "#eb6834", "#e34948"];
+
+const baseConfig = {
+    background: null,
+    font: "system-ui, -apple-system, Segoe UI, sans-serif",
+    axis: { labelColor: "#52514e", titleColor: "#52514e", gridColor: "#e1e0d9" },
+    legend: { labelColor: "#52514e", titleColor: "#52514e" },
+    view: { stroke: null }
+};
+
+vegaEmbed("#chart-distribution", {
+    $schema: "https://vega.github.io/schema/vega-lite/v6.json",
+    width: "container", height: 260,
+    data: { values: distributionData },
+    mark: { type: "bar", cornerRadiusTopLeft: 3, cornerRadiusTopRight: 3 },
+    encoding: {
+        x: { bin: { step: 5000 }, field: "Salaris", type: "quantitative", title: "Salaris (€)" },
+        y: { aggregate: "count", type: "quantitative", title: "Aantal medewerkers" },
+        color: {
+            field: "Salaris_Categorie", type: "nominal", sort: CATEGORY_ORDER,
+            scale: { domain: CATEGORY_ORDER, range: CATEGORY_COLORS },
+            legend: { title: "Categorie" }
+        },
+        tooltip: [{ field: "Salaris_Categorie", title: "Categorie" }, { aggregate: "count", title: "Aantal" }]
+    },
+    config: baseConfig
+}, { actions: false });
+
+vegaEmbed("#chart-dimension", {
+    $schema: "https://vega.github.io/schema/vega-lite/v6.json",
+    width: "container", height: 260,
+    data: { values: byDimensionData },
+    mark: "bar",
+    encoding: {
+        x: { field: "dimension_value", type: "nominal", sort: "-y", title: null },
+        y: { field: "aantal", type: "quantitative", aggregate: "sum", title: "Aantal medewerkers" },
+        color: {
+            field: "Salaris_Categorie", type: "nominal", sort: CATEGORY_ORDER,
+            scale: { domain: CATEGORY_ORDER, range: CATEGORY_COLORS },
+            legend: { title: "Categorie" }
+        },
+        tooltip: [{ field: "dimension_value", title: "Waarde" }, { field: "Salaris_Categorie", title: "Categorie" }, { field: "aantal", aggregate: "sum", title: "Aantal" }]
+    },
+    config: baseConfig
+}, { actions: false });
+
+vegaEmbed("#chart-lfl", {
+    $schema: "https://vega.github.io/schema/vega-lite/v6.json",
+    width: "container", height: 260,
+    data: { values: lflTrendData },
+    transform: [
+        { fold: ["LFL_Growth_Pct", "LFL_Growth_SameRoleContract_Pct"], as: ["Series", "Growth"] }
+    ],
+    mark: { type: "line", point: true },
+    encoding: {
+        x: { field: "Snapshot_Date", type: "temporal", title: null },
+        y: { field: "Growth", type: "quantitative", title: "YoY groei", axis: { format: "%" } },
+        color: {
+            field: "Series", type: "nominal",
+            scale: {
+                domain: ["LFL_Growth_Pct", "LFL_Growth_SameRoleContract_Pct"],
+                range: ["#10bdc6", "#2a3f5f"]
+            },
+            legend: { title: null, labelExpr: "datum.label == 'LFL_Growth_Pct' ? 'Alle behouden medewerkers' : 'Zelfde functie en contract'" }
+        },
+        tooltip: [{ field: "Snapshot_Date", type: "temporal", title: "Datum" }, { field: "Growth", type: "quantitative", format: ".1%", title: "Groei" }]
+    },
+    config: baseConfig
+}, { actions: false });
+</script>
+{% endblock %}

@@ -52,11 +52,7 @@ LLM-driven "ask a question, get a chart" interface.
 
 ### 1.3 Still genuinely open (❓)
 
-| # | Item | Where |
-|---|---|---|
-| O5 | The canonical salary-category definition (§14.2) — a **Phase 1 prerequisite**, not a Phase 0.5 blocker |
-
-O3 (Entra admin) and O4 (naming/tagging) from earlier revisions are resolved — see D18/D19 and `infra/variables.tf`'s `project = "hrdash"` prefix / `common_tags` (confirm or adjust when you review the Phase 0.5 code).
+Nothing currently open here. O3 (Entra admin), O4 (naming/tagging), and O5 (salary-category definition) are all resolved — see D18/D19, `infra/variables.tf`'s `project = "hrdash"` prefix/`common_tags`, and §14.2, respectively. New open items surface below as they come up (§16).
 
 ---
 
@@ -363,7 +359,7 @@ No client secret in GitHub Secrets, ever. Two (or more) distinct federated-crede
 
 **Phase 0 — architecture/reconnaissance.** See §13.2 for the explicit exit check.
 
-**Phase 0.5 — Infrastructure as Code foundation.** The 14-step Terraform path in §12.1, now under way — see `infra/` (structure, provider config, and the `bootstrap/` state-backend configuration are written; `bootstrap/` is reviewed but not yet applied, so no real Azure resource exists from this project yet). D19 confirmed the Entra-admin prerequisite before any HCL was written.
+**Phase 0.5 — Infrastructure as Code foundation. Core complete** (see §18 for the full log): Log Analytics, Container App Environment, a placeholder Container App with Managed Identity, Azure OpenAI + a `gpt-5.4-mini` deployment — all live in `Demo_dashboards`, version-controlled in a private GitHub repo. Remaining §12.1 items (Key Vault, the freshness job, Front Door, the Function App import) stay deferred until a concrete trigger.
 
 **Phase 1 — First application vertical slice: Salaris (final, D15).** Existing tables/versioned views → semantic/query layer → FastAPI backend → browser visualization → deployed Azure environment → tests/logging/config. No LLM yet. **Prerequisite specific to this phase, not to Phase 0.5:** the salary-category canonical-definition decision (§14.2, O5) must be made *before* building the category-dependent visuals — document the variants, recommend, get your explicit choice, log the PBI-comparability impact, then build.
 
@@ -383,15 +379,37 @@ Salaris, per D15. The comparison and reasoning from the previous revision (§13.
 
 Reviewed explicitly, as requested: LLM provider (resolved, contingent fallback designed, D14), first vertical slice (resolved, D15), CI/CD platform (resolved, D13), resource group strategy (resolved, D12/D18), database auth approach (resolved, prerequisite confirmed present, D19), charting library (resolved, D17), Key Vault (resolved: deferred, §10.4), Container App ownership model (resolved, Model A, §12.2), Front Door (resolved: not in v1, §10.7), technical-debt resolution process (resolved: per-domain, D16). **No open item blocks Phase 0.5** — only O5 (a Phase 1, not Phase 0.5, prerequisite) remains.
 
-**Phase 0 is complete.**
-
-**Phase 0.5 is under way** (see `infra/README.md` for current status): project structure, provider configuration, and the state-backend bootstrap configuration are written and reviewed; `bootstrap/` has **not** been applied yet, so this project has not created a single real Azure resource so far — that's the next checkpoint.
+**Phase 0 is complete. Phase 0.5's core is complete** (§18) — moving to Phase 1 next.
 
 ---
 
 ## 14. Semantic-model technical debt register — resolved per domain (D16)
 
-Unchanged in content from the previous revision (tenure's three definitions, salary-category's two conflicting schemes, `TODAY()`-volatility, dead model parts, the confirmed non-duplicate benchmark measures) — what changes is process, now made explicit: **each conflict is resolved only when the domain/page that actually uses it is migrated**, following the same four-step method every time — document the existing variants → recommend a canonical definition with reasoning → get your explicit choice → record any impact on historical Power BI comparability. §14.2 (salary category) is the first of these to actually fire, as a named Phase 1 prerequisite (§13, O5). §14.1 (tenure) doesn't block Phase 1 — it's relevant to Profiel/Verzuim, migrated later — and stays exactly as documented until then.
+Each conflict below is resolved only when the domain/page that actually uses it is migrated — never silently, never all up front — following the same four-step method every time: document the existing variants → recommend a canonical definition with reasoning → get an explicit choice → record any impact on historical Power BI comparability.
+
+### 14.1 Tenure ("maanden/jaren in dienst") — three inconsistent definitions (open, not a Phase 1 blocker)
+
+- **Existing definitions:** (a) `dim_employee[Maanden in dienst]` = `DATEDIFF(Aaneengesloten_Indienst_Datum, Datum_uitdienst or TODAY(), MONTH)`; (b) `fact_employment[Maanden in dienst]` = `DATEDIFF(Startdatum, TODAY(), MONTH)`; (c) `fact_employment[Months employed]`, a third variant using `Einddatum` when present.
+- **Where used:** (a) feeds Profiel's tenure display and Verzuim's "Jaren in dienst" scatter axis; (b)/(c) are used in `fact_employment`-scoped visuals.
+- **Behavior difference:** (a) reflects *continuous* service (survives internal transfers/promotions); (b)/(c) reflect a single employment-event's span, which resets on internal moves.
+- **Recommended canonical definition:** (a)'s basis — continuous service from `Aaneengesloten_Indienst_Datum` — computed relative to the selected as-of date, not `TODAY()`.
+- **Impact on PBI comparability:** measures currently built on (b)/(c) would shift slightly if migrated to (a)'s basis.
+- **Status:** not needed for Phase 1 (Salaris) — relevant to Profiel/Verzuim, migrated in a later phase. Stays open until then.
+
+### 14.2 Salary category bucketing — two incompatible schemes (RESOLVED for Phase 1)
+
+- **Existing definitions:** `dim_salary_band[Salaris categorie]` uses **exact-value matching** on hardcoded thresholds (34999/44999/59999/79999/99999); `fact_employment[Salaris categorie]` uses **range buckets** (<55K / 55–80K / >80K).
+- **Where used:** the current Salaris page's donut chart and histogram use the `fact_employment` version.
+- **Behavior difference:** different employees land in different named buckets depending on which version a given visual uses.
+- **Decision (confirmed):** adopt `dim_salary_band`'s *intent* — it's the dimension table meant to be the authoritative band reference — but **fix its brittle exact-match logic** into real range comparisons (`BETWEEN Minimum_Salaris AND Maximum_Salaris` against `dim_salary_band.Minimum_Salaris`/`Maximum_Salaris`) rather than carrying the fragility forward.
+- **Impact on PBI comparability:** the Salaris page's category-dependent visuals (histogram, donut) will show different bucket assignments than the current Power BI report, which uses the `fact_employment` version today. Flag this explicitly if the new app and the old report are ever compared side by side during Phase 1.
+- **Status:** resolved — this is now the canonical definition the Phase 1 semantic layer/views build against.
+
+### 14.3 Dead/unused model parts, and the confirmed non-duplicate measures
+
+- `_Measures_old.tmdl` and the disconnected `z_Incidenten_absref` table — confirmed safe to leave behind entirely, not migrated.
+- `Gemiddeld salaris vs benchmark %` vs. `Gemiddeld salaris vs benchmark huidig` — per the original Power BI review, these are two distinct, both-needed measures, not a duplicate pair. Migrate both, with distinct names.
+- `TODAY()`-volatile calculated columns (age, several tenure variants, `fact_vacancy[Dagen open]`) — no single universal answer; decide per measure/view, during its own migration, whether "as of right now" or "as of the selected Peildatum" is correct.
 
 ---
 
@@ -439,9 +457,7 @@ Documentation of existing/unmanaged Azure dependencies lives in **one place** (`
 
 ## 16. Open questions for you
 
-1. **O5** — the salary-category canonical definition (§14.2) — needed before Phase 1's category-dependent visuals are built, not before Phase 0.5.
-2. Confirm or adjust the `hrdash` naming prefix / tag scheme proposed in `infra/variables.tf` (was O4).
-3. Review `infra/bootstrap/` before it's applied — the first real Azure resource this project creates.
+None currently. O5 (salary category), the naming/tagging convention (O4), and the `infra/bootstrap/` review are all resolved (§14.2, `infra/variables.tf`, §18). New questions will be added here as they come up during Phase 1.
 
 ---
 
@@ -453,9 +469,9 @@ Documentation of existing/unmanaged Azure dependencies lives in **one place** (`
 
 **No longer open:** LLM provider direction, first vertical slice, CI/CD platform, resource-group strategy, technical-debt resolution process, charting library, Entra-admin prerequisite — all now fixed (§1.1).
 
-**Genuinely still open:** the items in §16 — none of which block Phase 0.5's next step.
+**Genuinely still open:** nothing currently (§16) — this summary reflects an earlier round; see §18 for the current, up-to-date status.
 
-**Phase 0 is marked complete** (§13.2).
+**Phase 0 is marked complete** (§13.2). Phase 0.5's core is also complete, and Phase 1's three pre-flight items are resolved (§18) — Phase 1 (Salaris) is ready to start.
 
 ---
 
@@ -464,7 +480,7 @@ Documentation of existing/unmanaged Azure dependencies lives in **one place** (`
 Logged after Phase 0's close, for implementation time — none of these change a Phase 0 decision or block Phase 0.5.
 
 1. **`BACKLOG.md` is not an automatic roadmap.** It's primarily a Power BI/data-generator backlog. Its planned English-column-rename item was checked against the live database and does **not** hold — the current, deliberate convention is English table names/technical keys with Dutch business columns, largely already in place (§7.1). Always verify the live schema before treating a backlog item as pending work; the semantic layer maps English catalog keys to Dutch display labels over the existing Dutch columns, with no rename required.
-2. **Container registry choice is deferred**, not ACR-by-default — decide when the first application image is actually built (start of Phase 1), see §12.1 step 9.
+2. **Container registry: GitHub Container Registry (ghcr.io), decided at the start of Phase 1.** Chosen over Azure Container Registry mainly because ACR pull access would need an `AcrPull` RBAC role assignment, hitting the same `Microsoft.Authorization/roleAssignments/write` gap as D20 (Contributor-only rights, admin unavailable); ghcr.io needs no Azure RBAC at all, and integrates with GitHub Actions' built-in `GITHUB_TOKEN`. **Reversible, low-cost to change**: the Container App's `image` reference is already outside Terraform's management (`ignore_changes`, §12.2 Model A) — switching registries later is a deploy-pipeline change (build/push target + one small Terraform `registry` block on the Container App resource), not an architecture change. Revisit if the team later prefers ACR and the RBAC situation has resolved (or fall back to ACR's admin-user credential in the meantime, accepting the Key-Vault question that would reopen).
 3. **The Managed Identity → Azure SQL bootstrap stays manual for now**: a one-time `CREATE USER ... FROM EXTERNAL PROVIDER` by a privileged Entra admin is acceptable; automating it through the database-migration pipeline's identity is a later improvement, only once there's real recurring value (§10.3/§12.4).
 4. **FastAPI is preferred, not fixed** — Flask/Django remain legitimate reconsiderations if concrete implementation requirements favor them (§4).
 5. **Vega-Lite is now the default charting library (D17)** — chosen after reviewing the comparison artifact (§4.1a), a considered and explicitly reversible decision, not an exclusion of Plotly.
@@ -495,3 +511,13 @@ Logged after Phase 0's close, for implementation time — none of these change a
 - ✅ **`gpt-5.4-mini` deployment live** on `oai-hrdash`. Apply complete: 1 added, 0 changed, 0 destroyed.
 
 **Phase 0.5's core resource list (§12.1) is now built**: existing-RG data source, Log Analytics workspace, Container App Environment, a placeholder Container App with system-assigned Managed Identity (image/revision ownership split wired in per §12.2), and Azure OpenAI with a `gpt-5.4-mini` deployment. Everything remaining in §12.1 (Key Vault, the Container Apps Job, Front Door, the Function App Terraform import) is explicitly deferred until a concrete trigger arises (§10.4/§10.7/D7) — nothing left to build speculatively right now.
+
+- ✅ **Version control in place**: `git init` in `HR Dashboard app/` (confirmed the correct root — not `infra/`, not the shared `Demo dashboards/` parent, which holds unrelated projects), `.gitignore` verified via `git add --dry-run` (both `.terraform.lock.hcl` files included, no `.terraform/` dirs, no `.tfstate`, `.env` untracked), first commit made, pushed to a new private GitHub repo. Phase 0.5's work is no longer local-only.
+
+### Phase 1 pre-flight — all three resolved
+
+- ✅ **O5 (salary-category definition) resolved** — §14.2: `dim_salary_band`'s range-based intent, exact-match logic fixed to `BETWEEN` comparisons. PBI-comparability impact logged.
+- ✅ **Container registry decided: GitHub Container Registry (ghcr.io)**, not ACR-by-default — avoids the same `roleAssignments/write` gap as D20; reversible later at low cost (§16 item 2 has the full reasoning).
+- ✅ **Container App identity linked to `db_hr_demo`**: `CREATE USER [ca-hrdash] FROM EXTERNAL PROVIDER` + an empty `app_runtime_reader` role with that user as a member, run by Laura via an AAD-authenticated session (§10.3's documented manual-bootstrap approach). No grants yet — those arrive per-view as Phase 1's `mcp` views get built (§7.2). A new Terraform output, `container_app_identity_principal_id`, records the identity's principal ID going forward (`0 added, 0 changed, 0 destroyed` — output-only apply).
+
+**No open item blocks starting Phase 1.**

@@ -14,3 +14,14 @@ crash.*.log
 
 # Local dev secrets (already in use this session, e.g. HR Dashboard app/.env)
 .env
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+uv.lock.bak
+

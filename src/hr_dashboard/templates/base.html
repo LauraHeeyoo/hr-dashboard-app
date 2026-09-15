@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}HR Dashboard{% endblock %}</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <header class="app-header">
+        <nav class="app-nav">
+            <a href="/salaris" class="nav-tab active">Salaris</a>
+            <span class="nav-tab disabled" title="Volgt in Phase 2">Verzuim</span>
+        </nav>
+    </header>
+    <main class="app-main">
+        {% block content %}{% endblock %}
+    </main>
+    <footer class="app-footer">
+        <span>HR Demo dashboard</span>
+        {% if peildatum %}<span>Peildatum: {{ peildatum }}</span>{% endif %}
+    </footer>
+</body>
+</html>
