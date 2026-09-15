@@ -272,7 +272,19 @@ def get_headcount_by_dimension(
     """Headcount by Salaris_Categorie, grouped by an approved dimension —
     the old PBIP's "Aantal medewerkers" chart. Colored by the qualitative,
     numbered salary-band labels (SALARY_CATEGORY_DISPLAY), matching that
-    chart specifically — not the currency-range labels used elsewhere."""
+    chart specifically — not the currency-range labels used elsewhere.
+
+    Also carries Benchmark_Status per row, unused by this chart's own
+    color encoding but needed so a click-to-highlight originating in the
+    *other* combi-chart (colored by Benchmark_Status) can match precisely
+    against both dimension_value and Salaris_Categorie here, instead of
+    only being able to check one of the two (salaris.html — Laura: a click
+    on Productie's "Laag" segment was highlighting all of Productie in the
+    benchmark chart, not just its "Laag" slice, because that chart's data
+    had no Salaris_Categorie to check against). Vega-Lite's own "sum"
+    aggregate still collapses across Benchmark_Status for this chart's
+    actual bars, so nothing about what's rendered changes.
+    """
     column = _validate_dimension(dimension)
     params = (as_of_date, *filters.as_sql_params())
 
@@ -280,10 +292,11 @@ def get_headcount_by_dimension(
         cur = conn.cursor()
         cur.execute(
             f"""
-            SELECT {column} AS dimension_value, Salaris_Categorie, COUNT(*) AS aantal
+            SELECT {column} AS dimension_value, Salaris_Categorie, Benchmark_Status,
+                   COUNT(*) AS aantal
             FROM mcp.fn_workforce_snapshot_asof({_ASOF_PARAM_PLACEHOLDERS})
             WHERE {column} IS NOT NULL
-            GROUP BY {column}, Salaris_Categorie
+            GROUP BY {column}, Salaris_Categorie, Benchmark_Status
             """,
             params,
         )
@@ -295,7 +308,10 @@ def get_benchmark_distribution_by_dimension(
 ) -> list[dict]:
     """Headcount by Benchmark_Status, grouped by an approved dimension — the
     old PBIP's "Verdeling salaris t.o.v. benchmark" chart. Distinct from
-    get_headcount_by_dimension, which colors by salary band instead."""
+    get_headcount_by_dimension, which colors by salary band instead.
+
+    Also carries Salaris_Categorie per row, for the same click-to-highlight
+    precision reason documented on get_headcount_by_dimension, in reverse."""
     column = _validate_dimension(dimension)
     params = (as_of_date, *filters.as_sql_params())
 
@@ -303,14 +319,15 @@ def get_benchmark_distribution_by_dimension(
         cur = conn.cursor()
         cur.execute(
             f"""
-            SELECT {column} AS dimension_value, Benchmark_Status, COUNT(*) AS aantal
+            SELECT {column} AS dimension_value, Benchmark_Status, Salaris_Categorie,
+                   COUNT(*) AS aantal
             FROM mcp.fn_workforce_snapshot_asof({_ASOF_PARAM_PLACEHOLDERS})
             WHERE {column} IS NOT NULL AND Benchmark_Status IS NOT NULL
-            GROUP BY {column}, Benchmark_Status
+            GROUP BY {column}, Benchmark_Status, Salaris_Categorie
             """,
             params,
         )
-        return _rows_as_dicts(cur)
+        return _relabel_salaris_categorie(_rows_as_dicts(cur))
 
 
 def get_lfl_growth_trend(start_date: date, end_date: date) -> list[dict]:

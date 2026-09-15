@@ -304,12 +304,43 @@ const baseConfig = {
 };
 
 // A plain (non-selection) Vega-Lite value parameter — every chart gets its
-// own "hl" signal, all kept in sync by setHighlight() above. The opacity
-// conditions below short-circuit on `hl == null` before touching any of
-// its properties, and on the chart's own field not matching the
-// highlight's colorField, so an unrelated chart just stays fully visible.
+// own "hl" signal, all kept in sync by setHighlight() above.
+//
+// Vega-Lite's *encoding-level* aggregation (e.g. `x: {aggregate: "sum"}`)
+// silently drops any field not part of its own groupby before the mark is
+// drawn — so an opacity `test` referencing a field the chart's own
+// encoding didn't group by (e.g. Salaris_Categorie on the chart whose own
+// color is Benchmark_Status) always sees `undefined` there, no matter
+// what the raw data actually carried. That was the second bug (salaris.html
+// — Laura: a click on Productie's "Laag" segment was highlighting all of
+// Productie in the benchmark chart, not just its "Laag" slice, and the
+// opposite direction was also wrong for Spreiding salaris). The fix: do
+// the aggregation explicitly via `transform`, with a `calculate` step
+// first that turns "does this row match the current highlight" into its
+// own boolean field, then `groupby` that field too — so a bar's color
+// band can itself split into a fully-opaque "matches" portion and a
+// dimmed "doesn't match" portion, which is also a closer match to how
+// Power BI's own cross-highlight actually renders a partial bar.
 const HIGHLIGHT_PARAM = [{ name: "hl", value: null }];
 const DIMMED_OPACITY = 0.2;
+const OPACITY_ENCODING = {
+    field: "matches_highlight", type: "nominal",
+    scale: { domain: [true, false], range: [1, DIMMED_OPACITY] },
+    legend: null
+};
+const MATCH_ORDER = { field: "matches_highlight", sort: "descending" };
+
+function matchExpr(dimField) {
+    const dimClause = dimField
+        ? `(hl.dimVal == null || datum['${dimField}'] === hl.dimVal)`
+        : "true";
+    return `hl == null || (${dimClause} && (hl.colorField == null || datum[hl.colorField] === hl.colorVal))`;
+}
+
+// Spreiding salaris has no "dimension_value" alias (it's per-employee, not
+// grouped by the switcher's dimension) — it needs the raw field name for
+// whatever dimension is currently selected instead (e.g. "Afdeling_Naam").
+const currentDimensionField = dimensionColumns[currentDimension];
 
 wireHighlight(
     vegaEmbed("#chart-distribution", {
@@ -317,26 +348,36 @@ wireHighlight(
         width: "container", height: 260,
         data: { values: employeeRows },
         params: HIGHLIGHT_PARAM,
+        transform: [
+            { bin: { step: 5000 }, field: "Salaris", as: "bin_Salaris" },
+            { calculate: matchExpr(currentDimensionField), as: "matches_highlight" },
+            {
+                aggregate: [{ op: "count", as: "count" }],
+                groupby: ["bin_Salaris", "bin_Salaris_end", "Salaris_Categorie", "matches_highlight"]
+            }
+        ],
         mark: { type: "bar", cornerRadiusTopLeft: 3, cornerRadiusTopRight: 3, cursor: "pointer" },
         encoding: {
-            x: { bin: { step: 5000 }, field: "Salaris", type: "quantitative", title: "Salaris (€)" },
-            y: { aggregate: "count", type: "quantitative", title: "Aantal medewerkers" },
+            x: { field: "bin_Salaris", bin: "binned", type: "quantitative", title: "Salaris (€)" },
+            x2: { field: "bin_Salaris_end" },
+            y: { field: "count", type: "quantitative", title: "Aantal medewerkers" },
             color: {
                 field: "Salaris_Categorie", type: "nominal", sort: CATEGORY_ORDER,
                 scale: { domain: CATEGORY_ORDER, range: CATEGORY_COLORS },
                 legend: { title: "Salaris categorie" }
             },
-            opacity: {
-                condition: {
-                    test: "hl == null || hl.colorField !== 'Salaris_Categorie' || datum.Salaris_Categorie === hl.colorVal",
-                    value: 1
-                },
-                value: DIMMED_OPACITY
-            },
-            tooltip: [{ field: "Salaris_Categorie", title: "Categorie" }, { aggregate: "count", title: "Aantal" }]
+            opacity: OPACITY_ENCODING,
+            order: MATCH_ORDER,
+            tooltip: [{ field: "Salaris_Categorie", title: "Categorie" }, { field: "count", title: "Aantal" }]
         },
         config: baseConfig
     }, { actions: false }),
+    // No dimensionField here on purpose: a histogram bar is an aggregate
+    // over many employees with different Afdeling_Naam/Manager_Naam/etc.
+    // values, so a click here can never set a single meaningful dimVal —
+    // only which highlight this chart's own bars should *react* to (via
+    // matchExpr(currentDimensionField) above) needs to know the current
+    // dimension's field name, not what a click here produces.
     { colorField: "Salaris_Categorie" }
 );
 
@@ -346,23 +387,25 @@ wireHighlight(
         width: "container", height: { step: 22 },
         data: { values: headcountByDimensionData },
         params: HIGHLIGHT_PARAM,
+        transform: [
+            { calculate: matchExpr("dimension_value"), as: "matches_highlight" },
+            {
+                aggregate: [{ op: "sum", field: "aantal", as: "total" }],
+                groupby: ["dimension_value", "Salaris_Categorie", "matches_highlight"]
+            }
+        ],
         mark: { type: "bar", cursor: "pointer" },
         encoding: {
             y: { field: "dimension_value", type: "nominal", sort: "-x", title: null },
-            x: { field: "aantal", type: "quantitative", aggregate: "sum", title: "Aantal medewerkers" },
+            x: { field: "total", type: "quantitative", title: "Aantal medewerkers" },
             color: {
                 field: "Salaris_Categorie", type: "nominal", sort: CATEGORY_ORDER,
                 scale: { domain: CATEGORY_ORDER, range: CATEGORY_COLORS },
                 legend: { title: "Salaris categorie" }
             },
-            opacity: {
-                condition: {
-                    test: "hl == null || ((hl.dimVal == null || datum.dimension_value === hl.dimVal) && (hl.colorField !== 'Salaris_Categorie' || datum.Salaris_Categorie === hl.colorVal))",
-                    value: 1
-                },
-                value: DIMMED_OPACITY
-            },
-            tooltip: [{ field: "dimension_value", title: "Waarde" }, { field: "Salaris_Categorie", title: "Categorie" }, { field: "aantal", aggregate: "sum", title: "Aantal" }]
+            opacity: OPACITY_ENCODING,
+            order: MATCH_ORDER,
+            tooltip: [{ field: "dimension_value", title: "Waarde" }, { field: "Salaris_Categorie", title: "Categorie" }, { field: "total", title: "Aantal" }]
         },
         config: baseConfig
     }, { actions: false }),
@@ -375,11 +418,18 @@ wireHighlight(
         width: "container", height: { step: 22 },
         data: { values: benchmarkByDimensionData },
         params: HIGHLIGHT_PARAM,
+        transform: [
+            { calculate: matchExpr("dimension_value"), as: "matches_highlight" },
+            {
+                aggregate: [{ op: "sum", field: "aantal", as: "total" }],
+                groupby: ["dimension_value", "Benchmark_Status", "matches_highlight"]
+            }
+        ],
         mark: { type: "bar", cursor: "pointer" },
         encoding: {
             y: { field: "dimension_value", type: "nominal", sort: "-x", title: null },
             x: {
-                field: "aantal", type: "quantitative", aggregate: "sum", stack: "normalize",
+                field: "total", type: "quantitative", stack: "normalize",
                 title: "Aandeel medewerkers", axis: { format: "%" }
             },
             color: {
@@ -387,17 +437,12 @@ wireHighlight(
                 scale: { domain: BENCHMARK_ORDER, range: BENCHMARK_COLORS },
                 legend: { title: "Benchmark" }
             },
-            opacity: {
-                condition: {
-                    test: "hl == null || ((hl.dimVal == null || datum.dimension_value === hl.dimVal) && (hl.colorField !== 'Benchmark_Status' || datum.Benchmark_Status === hl.colorVal))",
-                    value: 1
-                },
-                value: DIMMED_OPACITY
-            },
+            opacity: OPACITY_ENCODING,
+            order: MATCH_ORDER,
             tooltip: [
                 { field: "dimension_value", title: "Waarde" },
                 { field: "Benchmark_Status", title: "Benchmark" },
-                { field: "aantal", aggregate: "sum", title: "Aantal" }
+                { field: "total", title: "Aantal" }
             ]
         },
         config: baseConfig
