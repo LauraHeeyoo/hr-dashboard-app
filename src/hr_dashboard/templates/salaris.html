@@ -486,15 +486,24 @@ function formatLflDate(isoDate) {
         : d.toLocaleDateString("nl-NL", { month: "short", year: "numeric" });
 }
 
-function renderLflSlice() {
+function lflSlicedData() {
     const data = activeLflData();
     const startIdx = Math.min(Number(lflStartInput.value), Number(lflEndInput.value));
     const endIdx = Math.max(Number(lflStartInput.value), Number(lflEndInput.value));
-    const sliced = data.slice(startIdx, endIdx + 1);
     lflStartLabel.textContent = formatLflDate(data[startIdx].Snapshot_Date);
     lflEndLabel.textContent = formatLflDate(data[endIdx].Snapshot_Date);
+    return data.slice(startIdx, endIdx + 1);
+}
+
+// Dragging the slider only updates data on the already-rendered view (Vega
+// axis/encoding config isn't reactive to a plain data update). Switching
+// Maand/Jaar re-embeds the whole spec instead, since the x-axis itself
+// needs to change (year-only ticks in "Jaar" — a monthly-formatted axis
+// showing April/July/October ticks made no sense once every point *is* a
+// full year apart).
+function renderLflSlice() {
     if (lflView) {
-        lflView.data("lflData", sliced);
+        lflView.data("lflData", lflSlicedData());
         lflView.runAsync();
     }
 }
@@ -507,6 +516,47 @@ function resetLflRangeInputs() {
     lflEndInput.value = lastIdx;
 }
 
+function buildLflSpec() {
+    const isYearly = lflGranularity === "year";
+    // Only attach an "axis" override at all in yearly mode — an empty {}
+    // is not the same as no key to Vega-Lite's own default tick-density
+    // logic for a temporal axis, and passing one even empty visibly
+    // thinned out the monthly view's ticks too.
+    const xEncoding = { field: "Snapshot_Date", type: "temporal", title: null };
+    if (isYearly) {
+        xEncoding.axis = { format: "%Y", tickCount: { interval: "year", step: 1 }, labelAngle: 0 };
+    }
+    return {
+        $schema: "https://vega.github.io/schema/vega-lite/v6.json",
+        width: "container", height: 260,
+        data: { name: "lflData", values: lflSlicedData() },
+        transform: [
+            { fold: ["LFL_Growth_Pct", "LFL_Growth_SameRoleContract_Pct"], as: ["Series", "Growth"] }
+        ],
+        mark: { type: "line", point: true },
+        encoding: {
+            x: xEncoding,
+            y: { field: "Growth", type: "quantitative", title: "YoY groei", axis: { format: "%" } },
+            color: {
+                field: "Series", type: "nominal",
+                scale: {
+                    domain: ["LFL_Growth_Pct", "LFL_Growth_SameRoleContract_Pct"],
+                    range: ["#10bdc6", "#2a3f5f"]
+                },
+                legend: { title: null, labelExpr: "datum.label == 'LFL_Growth_Pct' ? 'Alle behouden medewerkers' : 'Zelfde functie en contract'" }
+            },
+            tooltip: [{ field: "Snapshot_Date", type: "temporal", title: "Datum" }, { field: "Growth", type: "quantitative", format: ".1%", title: "Groei" }]
+        },
+        config: baseConfig
+    };
+}
+
+function renderLflChart() {
+    vegaEmbed("#chart-lfl", buildLflSpec(), { actions: false }).then((result) => {
+        lflView = result.view;
+    });
+}
+
 document.querySelectorAll(".lfl-granularity .dimension-pill").forEach((btn) => {
     btn.addEventListener("click", () => {
         lflGranularity = btn.dataset.granularity;
@@ -514,39 +564,13 @@ document.querySelectorAll(".lfl-granularity .dimension-pill").forEach((btn) => {
             b.classList.toggle("active", b === btn);
         });
         resetLflRangeInputs();
-        renderLflSlice();
+        renderLflChart();
     });
 });
 
 lflStartInput.addEventListener("input", renderLflSlice);
 lflEndInput.addEventListener("input", renderLflSlice);
 resetLflRangeInputs();
-
-vegaEmbed("#chart-lfl", {
-    $schema: "https://vega.github.io/schema/vega-lite/v6.json",
-    width: "container", height: 260,
-    data: { name: "lflData", values: activeLflData() },
-    transform: [
-        { fold: ["LFL_Growth_Pct", "LFL_Growth_SameRoleContract_Pct"], as: ["Series", "Growth"] }
-    ],
-    mark: { type: "line", point: true },
-    encoding: {
-        x: { field: "Snapshot_Date", type: "temporal", title: null },
-        y: { field: "Growth", type: "quantitative", title: "YoY groei", axis: { format: "%" } },
-        color: {
-            field: "Series", type: "nominal",
-            scale: {
-                domain: ["LFL_Growth_Pct", "LFL_Growth_SameRoleContract_Pct"],
-                range: ["#10bdc6", "#2a3f5f"]
-            },
-            legend: { title: null, labelExpr: "datum.label == 'LFL_Growth_Pct' ? 'Alle behouden medewerkers' : 'Zelfde functie en contract'" }
-        },
-        tooltip: [{ field: "Snapshot_Date", type: "temporal", title: "Datum" }, { field: "Growth", type: "quantitative", format: ".1%", title: "Groei" }]
-    },
-    config: baseConfig
-}, { actions: false }).then((result) => {
-    lflView = result.view;
-    renderLflSlice();
-});
+renderLflChart();
 </script>
 {% endblock %}
