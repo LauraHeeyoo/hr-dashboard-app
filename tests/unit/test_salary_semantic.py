@@ -20,6 +20,10 @@ def test_get_latest_snapshot_date_is_a_real_date():
     assert d.year >= 2020
 
 
+def test_get_earliest_snapshot_date_is_before_the_latest():
+    assert salary.get_earliest_snapshot_date() < salary.get_latest_snapshot_date()
+
+
 def test_salary_kpis_are_plausible():
     kpis = salary.get_salary_kpis(AS_OF, NO_FILTERS)
     assert kpis.aantal_medewerkers > 0
@@ -103,6 +107,25 @@ def test_lfl_growth_trend_is_a_small_percentage():
         if r["LFL_Growth_Pct"] is not None:
             msg = "LFL growth should be a modest fraction, not a raw salary"
             assert -0.5 < r["LFL_Growth_Pct"] < 0.5, msg
+
+
+def test_lfl_growth_trend_rejects_unknown_granularity():
+    try:
+        salary.get_lfl_growth_trend(date(2024, 1, 1), AS_OF, granularity="week")
+        assert False, "expected ValueError"
+    except ValueError:
+        pass
+
+
+def test_lfl_growth_trend_year_granularity_is_a_real_recomputation():
+    """'year' isn't a subsample of the monthly series — it's one row per
+    calendar year, each a genuine 12-month retained-cohort comparison
+    anchored on that year's latest available snapshot."""
+    monthly = salary.get_lfl_growth_trend(date(2020, 1, 1), AS_OF, granularity="month")
+    yearly = salary.get_lfl_growth_trend(date(2020, 1, 1), AS_OF, granularity="year")
+    assert 0 < len(yearly) < len(monthly)
+    years_seen = {r["Snapshot_Date"].year for r in yearly}
+    assert len(years_seen) == len(yearly), "expected at most one row per calendar year"
 
 
 def test_get_filter_options_returns_known_afdelingen():

@@ -1,7 +1,7 @@
 -- ============================================================================
--- mcp.fn_salary_lfl_growth_trend(@start_date, @end_date)
+-- mcp.fn_salary_lfl_growth_trend(@start_date, @end_date, @granularity)
 --
--- "Like-for-like" (LFL) YoY salary growth trend — one row per available
+-- "Like-for-like" (LFL) YoY salary growth trend — one row per included
 -- snapshot date in the range. For each date, finds each employee's salary
 -- 12 months earlier (retained-cohort comparison: only employees present at
 -- both dates count), and averages the per-employee growth rate.
@@ -14,21 +14,49 @@
 --     whose role AND contract type are unchanged between the two dates
 --     (the "apples to apples" stricter comparison)
 --
+-- @granularity ('month' | 'year') controls which dates get their own row:
+-- 'month' (default, unchanged behavior) includes every available snapshot
+-- date; 'year' includes only the latest available snapshot date per
+-- calendar year — the drill-out view (salaris.html — Laura: "groter
+-- drillen naar jaar" should be a real recomputed YoY between year-anchors,
+-- not just picking a pre-computed monthly point). The 12-month lookback
+-- itself never changes — only which dates count as a "current" anchor
+-- does, so this is a real re-aggregation, not a display-only subsample.
+-- Deliberately picks the *latest* date per year rather than assuming
+-- December, since it must keep working if the underlying simulation is
+-- ever re-run with a different date range.
+--
 -- Note: aliased as CurrentSnapshotDate/PriorSnapshotDate, not
 -- Current_Date/Prior_Date — the latter hit a SQL Server parser error
 -- ("Incorrect syntax near the keyword 'Current_Date'"), since CURRENT_DATE
 -- is a reserved word in SQL Server's parser even though T-SQL itself uses
 -- GETDATE() instead of implementing it.
 -- ============================================================================
-CREATE OR ALTER FUNCTION mcp.fn_salary_lfl_growth_trend (@start_date DATE, @end_date DATE)
+CREATE OR ALTER FUNCTION mcp.fn_salary_lfl_growth_trend (
+    @start_date DATE,
+    @end_date DATE,
+    @granularity NVARCHAR(10) = 'month'
+)
 RETURNS TABLE
 AS
 RETURN
 (
-    WITH snapshot_dates AS (
+    WITH distinct_dates AS (
         SELECT DISTINCT Snapshot_Date
         FROM dbo.fact_workforce_snapshot
         WHERE Snapshot_Date BETWEEN @start_date AND @end_date
+    ),
+    snapshot_dates AS (
+        SELECT Snapshot_Date FROM distinct_dates WHERE @granularity <> 'year'
+        UNION
+        SELECT Snapshot_Date
+        FROM (
+            SELECT
+                Snapshot_Date,
+                ROW_NUMBER() OVER (PARTITION BY YEAR(Snapshot_Date) ORDER BY Snapshot_Date DESC) AS rn
+            FROM distinct_dates
+        ) AS ranked
+        WHERE @granularity = 'year' AND rn = 1
     ),
     prior_dates AS (
         -- for each snapshot date, the latest available snapshot date that's

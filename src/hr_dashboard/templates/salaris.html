@@ -139,8 +139,24 @@
 
         <section class="chart-row">
             <div class="chart-card chart-card-wide">
-                <h2>Gemiddelde salarisgroei like-for-like (YoY)</h2>
+                <div class="lfl-header">
+                    <h2>Gemiddelde salarisgroei like-for-like (YoY)</h2>
+                    <div class="lfl-granularity">
+                        <button type="button" class="dimension-pill active" data-granularity="month">Maand</button>
+                        <button type="button" class="dimension-pill" data-granularity="year">Jaar</button>
+                    </div>
+                </div>
                 <div id="chart-lfl"></div>
+                <div class="lfl-range">
+                    <div class="lfl-range-slider">
+                        <input type="range" id="lfl-range-start" min="0" max="0" value="0">
+                        <input type="range" id="lfl-range-end" min="0" max="0" value="0">
+                    </div>
+                    <div class="lfl-range-labels">
+                        <span id="lfl-range-start-label"></span>
+                        <span id="lfl-range-end-label"></span>
+                    </div>
+                </div>
             </div>
         </section>
     </div>
@@ -156,7 +172,8 @@ document.querySelectorAll('#filter-form select, #filter-form input[type="date"]'
 const employeeRows = {{ employee_rows_json | safe }};
 const headcountByDimensionData = {{ headcount_by_dimension_json | safe }};
 const benchmarkByDimensionData = {{ benchmark_by_dimension_json | safe }};
-const lflTrendData = {{ lfl_trend_json | safe }};
+const lflTrendMonthly = {{ lfl_trend_monthly_json | safe }};
+const lflTrendYearly = {{ lfl_trend_yearly_json | safe }};
 
 // The dimension currently selected in the switcher, and which raw
 // employee-row field it corresponds to (e.g. "manager" -> "Manager_Naam")
@@ -444,10 +461,71 @@ wireHighlight(
     { dimensionField: "dimension_value", colorField: "Benchmark_Status" }
 );
 
+// --- LFL trend: Maand/Jaar granularity + a range slider, both entirely
+// client-side. Both granularities' full history are already loaded (the
+// server has no fixed lookback for this chart, unlike the rest of the
+// page — ARCHITECTURE.md, this chart isn't point-in-time), so switching
+// granularity or dragging the slider just re-slices an already-loaded
+// array and pushes it into the existing Vega view — no server round trip,
+// same reasoning as the click-to-highlight mechanism above.
+let lflGranularity = "month";
+let lflView = null;
+const lflStartInput = document.getElementById("lfl-range-start");
+const lflEndInput = document.getElementById("lfl-range-end");
+const lflStartLabel = document.getElementById("lfl-range-start-label");
+const lflEndLabel = document.getElementById("lfl-range-end-label");
+
+function activeLflData() {
+    return lflGranularity === "month" ? lflTrendMonthly : lflTrendYearly;
+}
+
+function formatLflDate(isoDate) {
+    const d = new Date(isoDate);
+    return lflGranularity === "year"
+        ? d.toLocaleDateString("nl-NL", { year: "numeric" })
+        : d.toLocaleDateString("nl-NL", { month: "short", year: "numeric" });
+}
+
+function renderLflSlice() {
+    const data = activeLflData();
+    const startIdx = Math.min(Number(lflStartInput.value), Number(lflEndInput.value));
+    const endIdx = Math.max(Number(lflStartInput.value), Number(lflEndInput.value));
+    const sliced = data.slice(startIdx, endIdx + 1);
+    lflStartLabel.textContent = formatLflDate(data[startIdx].Snapshot_Date);
+    lflEndLabel.textContent = formatLflDate(data[endIdx].Snapshot_Date);
+    if (lflView) {
+        lflView.data("lflData", sliced);
+        lflView.runAsync();
+    }
+}
+
+function resetLflRangeInputs() {
+    const lastIdx = activeLflData().length - 1;
+    lflStartInput.max = lastIdx;
+    lflEndInput.max = lastIdx;
+    lflStartInput.value = 0;
+    lflEndInput.value = lastIdx;
+}
+
+document.querySelectorAll(".lfl-granularity .dimension-pill").forEach((btn) => {
+    btn.addEventListener("click", () => {
+        lflGranularity = btn.dataset.granularity;
+        document.querySelectorAll(".lfl-granularity .dimension-pill").forEach((b) => {
+            b.classList.toggle("active", b === btn);
+        });
+        resetLflRangeInputs();
+        renderLflSlice();
+    });
+});
+
+lflStartInput.addEventListener("input", renderLflSlice);
+lflEndInput.addEventListener("input", renderLflSlice);
+resetLflRangeInputs();
+
 vegaEmbed("#chart-lfl", {
     $schema: "https://vega.github.io/schema/vega-lite/v6.json",
     width: "container", height: 260,
-    data: { values: lflTrendData },
+    data: { name: "lflData", values: activeLflData() },
     transform: [
         { fold: ["LFL_Growth_Pct", "LFL_Growth_SameRoleContract_Pct"], as: ["Series", "Growth"] }
     ],
@@ -466,6 +544,9 @@ vegaEmbed("#chart-lfl", {
         tooltip: [{ field: "Snapshot_Date", type: "temporal", title: "Datum" }, { field: "Growth", type: "quantitative", format: ".1%", title: "Groei" }]
     },
     config: baseConfig
-}, { actions: false });
+}, { actions: false }).then((result) => {
+    lflView = result.view;
+    renderLflSlice();
+});
 </script>
 {% endblock %}

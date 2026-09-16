@@ -75,8 +75,18 @@ def salaris_page(
     )
     filter_options = salary.get_filter_options(peildatum, filters)
 
-    trend_start = date(peildatum.year - 4, peildatum.month, 1)
-    lfl_trend = salary.get_lfl_growth_trend(trend_start, peildatum)
+    # The LFL trend chart isn't point-in-time like the rest of the page —
+    # it's a whole history, so it always spans the database's true earliest
+    # to latest snapshot (independent of Peildatum), not a fixed lookback.
+    # salaris.html fetches both granularities once and then a client-side
+    # range slider + Maand/Jaar toggle works entirely from what's already
+    # loaded — no server round trip per interaction (ARCHITECTURE.md —
+    # Laura: this was the same "every click reloads the page" complaint
+    # that motivated fixing connection pooling).
+    lfl_earliest = salary.get_earliest_snapshot_date()
+    lfl_latest = salary.get_latest_snapshot_date()
+    lfl_trend_monthly = salary.get_lfl_growth_trend(lfl_earliest, lfl_latest, "month")
+    lfl_trend_yearly = salary.get_lfl_growth_trend(lfl_earliest, lfl_latest, "year")
 
     # Dimension-switcher links: same page, same filters, only `dimension`
     # changes — built server-side so the template just renders plain <a>
@@ -106,7 +116,8 @@ def salaris_page(
             "benchmark_by_dimension_json": json.dumps(
                 benchmark_by_dimension, default=_json_default
             ),
-            "lfl_trend_json": json.dumps(lfl_trend, default=_json_default),
+            "lfl_trend_monthly_json": json.dumps(lfl_trend_monthly, default=_json_default),
+            "lfl_trend_yearly_json": json.dumps(lfl_trend_yearly, default=_json_default),
             # So the client-side highlight/KPI recompute knows which raw
             # employee-row field the current dimension switcher corresponds
             # to (e.g. "manager" -> "Manager_Naam") without duplicating

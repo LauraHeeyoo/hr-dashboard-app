@@ -155,6 +155,18 @@ def get_latest_snapshot_date() -> date:
         return cur.fetchone()[0]
 
 
+def get_earliest_snapshot_date() -> date:
+    """The oldest available data point — used to size the LFL trend chart's
+    range slider (salaris.html) so it always spans exactly what's actually
+    in the database, not a hardcoded assumption. If the simulation is ever
+    re-run with a different starting year, this just picks that up on the
+    next page load, no code change needed."""
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT MIN(Snapshot_Date) FROM dbo.fact_workforce_snapshot")
+        return cur.fetchone()[0]
+
+
 def get_filter_options(as_of_date: date, filters: SalaryFilters) -> dict[str, list[str]]:
     """Cross-filtered option lists for the filter-rail dropdowns.
 
@@ -330,20 +342,36 @@ def get_benchmark_distribution_by_dimension(
         return _relabel_salaris_categorie(_rows_as_dicts(cur))
 
 
-def get_lfl_growth_trend(start_date: date, end_date: date) -> list[dict]:
-    # Not filtered by the rail (yet) — the LFL cohort comparison already has
-    # its own retained-employee logic; combining that with the filter rail
-    # (e.g. "only Productie, both 12 months ago AND now") is a real design
-    # question deferred until this chart is revisited, not an oversight.
+LFL_GRANULARITIES = ("month", "year")
+
+
+def get_lfl_growth_trend(
+    start_date: date, end_date: date, granularity: str = "month"
+) -> list[dict]:
+    """`granularity="year"` is a real recomputed YoY between year-anchors
+    (the latest available snapshot date each calendar year), not a
+    subsample of the monthly series — see the SQL function's own comment
+    for why. Validated against an allowlist before it ever reaches SQL,
+    same reasoning as DIMENSION_COLUMNS (ARCHITECTURE.md §7.4), even though
+    it's still passed as a bound parameter, never interpolated.
+
+    Not filtered by the rail (yet) — the LFL cohort comparison already has
+    its own retained-employee logic; combining that with the filter rail
+    (e.g. "only Productie, both 12 months ago AND now") is a real design
+    question deferred until this chart is revisited, not an oversight.
+    """
+    if granularity not in LFL_GRANULARITIES:
+        raise ValueError(f"Unknown granularity: {granularity!r} (allowed: {LFL_GRANULARITIES})")
     with get_connection() as conn:
         cur = conn.cursor()
         cur.execute(
             """
             SELECT Snapshot_Date, LFL_Growth_Pct, LFL_Growth_SameRoleContract_Pct
-            FROM mcp.fn_salary_lfl_growth_trend(?, ?)
+            FROM mcp.fn_salary_lfl_growth_trend(?, ?, ?)
             ORDER BY Snapshot_Date
             """,
             start_date,
             end_date,
+            granularity,
         )
         return _rows_as_dicts(cur)

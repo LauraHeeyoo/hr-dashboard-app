@@ -140,16 +140,107 @@ body {
     border-radius: 16px;
     border: 1px solid var(--border);
     font-size: 0.8rem;
+    font-family: inherit;
     font-weight: 600;
     text-decoration: none;
     color: var(--text-muted);
     background: #fff;
+    cursor: pointer;
 }
 
 .dimension-pill.active {
     background: var(--teal);
     border-color: var(--teal);
     color: #fff;
+}
+
+.lfl-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.lfl-header h2 {
+    margin: 0;
+}
+
+.lfl-granularity {
+    display: flex;
+    gap: 6px;
+}
+
+/* A dual-handle range slider isn't a native HTML control — this overlays
+   two <input type="range"> on top of each other and lets clicks pass
+   through to whichever thumb is underneath (pointer-events: none on the
+   track, re-enabled only on the thumb itself). */
+.lfl-range {
+    margin-top: 14px;
+}
+
+.lfl-range-slider {
+    position: relative;
+    height: 20px;
+}
+
+.lfl-range-slider input[type="range"] {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    margin: 0;
+    width: 100%;
+    -webkit-appearance: none;
+    appearance: none;
+    background: transparent;
+    pointer-events: none;
+}
+
+.lfl-range-slider input[type="range"]::-webkit-slider-runnable-track {
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+}
+
+.lfl-range-slider input[type="range"]::-moz-range-track {
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+}
+
+.lfl-range-slider input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    pointer-events: auto;
+    width: 16px;
+    height: 16px;
+    margin-top: -6px;
+    border-radius: 50%;
+    background: var(--teal);
+    border: 2px solid #fff;
+    box-shadow: 0 0 0 1px var(--teal);
+    cursor: pointer;
+}
+
+.lfl-range-slider input[type="range"]::-moz-range-thumb {
+    pointer-events: auto;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--teal);
+    border: 2px solid #fff;
+    box-shadow: 0 0 0 1px var(--teal);
+    cursor: pointer;
+}
+
+.lfl-range-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    margin-top: 6px;
 }
 
 .page-title {
