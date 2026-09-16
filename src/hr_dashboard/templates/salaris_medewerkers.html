@@ -1,0 +1,123 @@
+{% extends "dashboard_base.html" %}
+{% block title %}Medewerkers — Salaris — HR Dashboard{% endblock %}
+{% block grid_layout_key %}medewerkersGridLayout{% endblock %}
+
+{% block page_title %}{{ subset_label }} <span class="page-title-count">({{ aantal }})</span>{% endblock %}
+
+{% block page_actions %}
+<a href="/salaris" class="btn btn-secondary">&larr; Terug naar Salaris</a>
+{% endblock %}
+
+{% block tiles %}
+<div class="grid-stack-item" gs-id="filter-rail" gs-x="0" gs-y="0" gs-w="3" gs-h="14">
+    <aside class="grid-stack-item-content filter-rail">
+        <span class="tile-grip"></span>
+        <form method="get" action="/salaris/medewerkers" id="filter-form">
+            <div class="filter-field">
+                <label for="as_of">Peildatum</label>
+                <input type="date" id="as_of" name="as_of" value="{{ peildatum }}">
+            </div>
+            <div class="filter-field">
+                <label for="afdeling">Afdeling</label>
+                <select id="afdeling" name="afdeling">
+                    <option value="">Alle</option>
+                    {% for opt in filter_options.afdeling %}
+                    <option value="{{ opt }}" {% if filters.afdeling == opt %}selected{% endif %}>{{ opt }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="filter-field">
+                <label for="functie">Functie</label>
+                <select id="functie" name="functie">
+                    <option value="">Alle</option>
+                    {% for opt in filter_options.functie %}
+                    <option value="{{ opt }}" {% if filters.functie == opt %}selected{% endif %}>{{ opt }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="filter-field">
+                <label for="manager">Manager</label>
+                <select id="manager" name="manager">
+                    <option value="">Alle</option>
+                    {% for opt in filter_options.manager %}
+                    <option value="{{ opt }}" {% if filters.manager == opt %}selected{% endif %}>{{ opt }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="filter-field">
+                <label for="opleidingsniveau">Opleidingsniveau</label>
+                <select id="opleidingsniveau" name="opleidingsniveau">
+                    <option value="">Alle</option>
+                    {% for opt in filter_options.opleidingsniveau %}
+                    <option value="{{ opt }}" {% if filters.opleidingsniveau == opt %}selected{% endif %}>{{ opt }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="filter-field">
+                <label for="salaris_categorie">Salarisgroep</label>
+                <select id="salaris_categorie" name="salaris_categorie">
+                    <option value="">Alle</option>
+                    {% for opt in filter_options.salaris_categorie %}
+                    <option value="{{ opt }}" {% if filters.salaris_categorie == opt %}selected{% endif %}>{{ opt }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <input type="hidden" name="subset" value="{{ subset }}">
+            <div class="filter-actions">
+                <button type="submit" class="btn btn-primary">Toepassen</button>
+                <a href="{{ clear_filters_url }}" class="btn btn-secondary">Wis alle filters</a>
+            </div>
+        </form>
+    </aside>
+</div>
+
+<div class="grid-stack-item" gs-id="medewerkers-table" gs-x="3" gs-y="0" gs-w="9" gs-h="14">
+    <div class="grid-stack-item-content chart-card">
+        <span class="tile-grip"></span>
+        <div class="chart-scroll">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Medewerker</th>
+                        <th>Afdeling</th>
+                        <th>Functie</th>
+                        <th>Manager</th>
+                        <th class="num">Salaris</th>
+                        <th class="num">Werkelijk uitbetaald</th>
+                        <th class="num">T.o.v. benchmark</th>
+                        <th class="num">Compa-ratio</th>
+                        <th>Opleidingsniveau</th>
+                        <th>Geslacht</th>
+                        <th class="num">Dienstjaren</th>
+                        <th>Performance</th>
+                        <th>Tevredenheid</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in employee_rows %}
+                    <tr>
+                        <td>{{ row.Medewerker_Naam }}</td>
+                        <td>{{ row.Afdeling_Naam }}</td>
+                        <td>{{ row.Functie_Naam }}</td>
+                        <td>{{ row.Manager_Naam }}</td>
+                        <td class="num">€{{ "{:,.0f}".format(row.Salaris).replace(",", ".") }}</td>
+                        <td class="num">€{{ "{:,.0f}".format(row.Salaris_Werkelijk).replace(",", ".") }}</td>
+                        <td class="num">{% if row.Benchmark_Ratio is not none %}{{ "{:.0f}".format(row.Benchmark_Ratio * 100) }}%{% else %}—{% endif %}</td>
+                        <td class="num">{% if row.Compa_Ratio_Interne_Schaal is not none %}{{ "{:.0f}".format(row.Compa_Ratio_Interne_Schaal * 100) }}%{% else %}—{% endif %}</td>
+                        <td>{{ row.Opleidingsniveau or "—" }}</td>
+                        <td>{{ row.Geslacht or "—" }}</td>
+                        <td class="num">{{ row.Dienstjaren }}</td>
+                        <td>{{ row.Performance_Bin or "—" }}</td>
+                        <td>{{ row.Tevredenheidsband_Naam or "—" }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="13">Geen medewerkers gevonden voor deze combinatie van filters.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -19,7 +19,8 @@
     </main>
     <footer class="app-footer">
         <span>HR Demo dashboard</span>
-        {% if peildatum %}<span>Peildatum: {{ peildatum }}</span>{% endif %}
+        {% if last_refresh %}<span>Laatste refresh: {{ last_refresh }}</span>{% endif %}
+        <img src="/static/heeyoo-logo.svg" alt="Heeyoo" class="app-footer-logo">
     </footer>
 </body>
 </html>

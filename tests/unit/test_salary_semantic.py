@@ -150,3 +150,56 @@ def test_get_filter_options_never_excludes_the_selected_value_itself():
     though it's cleared when computing that field's cross-filtered options."""
     options = salary.get_filter_options(AS_OF, SalaryFilters(afdeling="Productie"))
     assert "Productie" in options["afdeling"]
+
+
+def test_salary_filters_has_no_bron_field():
+    """Recruitment source was removed from this page entirely (Laura,
+    reviewing as an HR manager: it answers a recruitment question, not a
+    compensation one) — not just hidden in the UI."""
+    assert not hasattr(SalaryFilters(), "bron")
+
+
+def test_employee_rows_carry_the_new_hr_manager_review_fields():
+    rows = salary.get_employee_rows(AS_OF, NO_FILTERS)
+    row = rows[0]
+    for field in ("Salaris_Werkelijk", "Geslacht", "Opleidingsniveau", "Dienstjaren",
+                  "Compa_Ratio_Interne_Schaal"):
+        assert field in row, f"missing {field!r} on employee row"
+
+
+def test_compute_total_payroll_uses_actual_not_fte_equivalent_pay():
+    """Salaris_Werkelijk (actual pro-rata pay), not Salaris (the FTE-
+    equivalent figure everything else on the page correctly uses) — summing
+    the FTE-equivalent would overstate real payroll cost."""
+    rows = salary.get_employee_rows(AS_OF, NO_FILTERS)
+    total = salary.compute_total_payroll(rows)
+    assert total == sum(r["Salaris_Werkelijk"] for r in rows)
+    assert total < sum(r["Salaris"] for r in rows), (
+        "actual pay should be <= FTE-equivalent pay whenever anyone works part-time"
+    )
+
+
+def test_corrected_gender_pay_gap_is_plausible():
+    gap = salary.get_corrected_gender_pay_gap(AS_OF, NO_FILTERS)
+    assert gap.aantal_man > 0
+    assert gap.aantal_vrouw > 0
+    assert gap.aantal_vergelijkbare_functies > 0
+    assert -0.5 < gap.ongecorrigeerd_pct < 0.5
+    assert -0.5 < gap.gecorrigeerd_pct < 0.5
+
+
+def test_new_hire_vs_current_known_dimensions_return_rows():
+    rows = salary.get_new_hire_vs_current(AS_OF, "functie", NO_FILTERS)
+    assert len(rows) > 0
+    row = rows[0]
+    assert row["gem_start_salaris"] > 0
+    assert row["gem_huidig_salaris"] > 0
+    assert row["aantal"] > 0
+
+
+def test_new_hire_vs_current_rejects_unknown_dimension():
+    try:
+        salary.get_new_hire_vs_current(AS_OF, "not_a_real_dimension", NO_FILTERS)
+        assert False, "expected ValueError"
+    except ValueError:
+        pass

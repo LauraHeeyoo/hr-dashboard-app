@@ -24,18 +24,24 @@ from hr_dashboard.db.connection import get_connection
 # once this is driven by user/LLM input in a later phase.
 #
 # Matches the old PBIP's own dimension-switcher parameter (`Parameter dim
-# slicer salaris`) field-for-field, including its order — Afdeling, Manager,
-# Functie, Performance, Tevredenheid. Opleidingsniveau is a filter-rail field
-# only there, never a breakdown dimension, so it's deliberately absent here.
-# One intentional deviation: the old parameter grouped Manager by first name
-# only (`dim_manager[Voornaam]`), which collides whenever two managers share
-# a first name; this groups by full name instead, like the filter rail does.
+# slicer salaris`) field-for-field, plus its original order — Afdeling,
+# Manager, Functie, Performance, Tevredenheid — with two additions Laura
+# asked for after reviewing the page as an HR manager: Opleidingsniveau
+# (rewards pay consistently by education level?) and Geslacht (pay by
+# gender — see get_corrected_gender_pay_gap for the actual equity metric;
+# this dimension option only gives the raw, unadjusted breakdown, same as
+# every other dimension here). One intentional deviation from the old PBIP:
+# it grouped Manager by first name only (`dim_manager[Voornaam]`), which
+# collides whenever two managers share a first name; this groups by full
+# name instead, like the filter rail does.
 DIMENSION_COLUMNS: dict[str, str] = {
     "afdeling": "Afdeling_Naam",
     "manager": "Manager_Naam",
     "functie": "Functie_Naam",
     "performance": "Performance_Bin",
     "tevredenheid": "Tevredenheidsband_Naam",
+    "opleidingsniveau": "Opleidingsniveau",
+    "geslacht": "Geslacht",
 }
 DIMENSION_LABELS: dict[str, str] = {
     "afdeling": "Afdeling",
@@ -43,19 +49,25 @@ DIMENSION_LABELS: dict[str, str] = {
     "functie": "Functie",
     "performance": "Performance",
     "tevredenheid": "Tevredenheid",
+    "opleidingsniveau": "Opleidingsniveau",
+    "geslacht": "Geslacht",
 }
 
 # Every filter-rail field -> the column mcp.fn_workforce_snapshot_asof
 # returns for it. Used to cross-filter each field's own dropdown options
 # by every OTHER currently selected filter (ARCHITECTURE.md — Laura: picking
 # an afdeling shouldn't leave incompatible managers selectable afterwards).
+#
+# No "bron" (recruitment source) entry — it was removed from this page
+# entirely (rail dropdown, SQL param, everything): reviewed as an HR
+# manager, it answers a recruitment question, not a compensation one, and
+# didn't earn its place on a comp-focused filter rail.
 FILTER_FIELD_COLUMNS: dict[str, str] = {
     "afdeling": "Afdeling_Naam",
     "functie": "Functie_Naam",
     "manager": "Manager_Naam",
     "opleidingsniveau": "Opleidingsniveau",
     "salaris_categorie": "Salaris_Categorie",
-    "bron": "Bron_Naam",
 }
 
 # Must stay in sync with CATEGORY_ORDER in salaris.html — the canonical
@@ -102,7 +114,6 @@ class SalaryFilters:
     manager: str | None = None
     opleidingsniveau: str | None = None
     salaris_categorie: str | None = None
-    bron: str | None = None
 
     def as_sql_params(self) -> tuple:
         # Order must match mcp.fn_workforce_snapshot_asof's parameter order
@@ -113,17 +124,16 @@ class SalaryFilters:
             self.manager,
             self.opleidingsniveau,
             self.salaris_categorie,
-            self.bron,
         )
 
     def is_empty(self) -> bool:
         return all(getattr(self, f.name) is None for f in fields(self))
 
 
-# mcp.fn_workforce_snapshot_asof(@as_of_date, then 6 filter params) — used
+# mcp.fn_workforce_snapshot_asof(@as_of_date, then 5 filter params) — used
 # everywhere the function is called from Python, so the placeholder count
 # only needs updating in one place if the function ever gains another param.
-_ASOF_PARAM_PLACEHOLDERS = "?, " * 6 + "?"
+_ASOF_PARAM_PLACEHOLDERS = "?, " * 5 + "?"
 
 
 def _rows_as_dicts(cursor) -> list[dict]:
@@ -234,6 +244,151 @@ def get_salary_kpis(as_of_date: date, filters: SalaryFilters) -> SalaryKpis:
         )
 
 
+def compute_total_payroll(employee_rows: list[dict]) -> float:
+    """Total payroll cost — sums Salaris_Werkelijk (actual, pro-rata pay),
+    not the FTE-equivalent Salaris. Laura: summing the FTE-equivalent figure
+    here would overstate real payroll cost, since a third of this workforce
+    works less than 1.0 FTE and isn't actually paid that amount. Computed
+    from the same employee_rows array already fetched for Spreiding
+    salaris/click-to-highlight — not a separate query."""
+    return sum(row["Salaris_Werkelijk"] for row in employee_rows)
+
+
+@dataclass
+class GenderPayGap:
+    ongecorrigeerd_pct: float | None
+    gecorrigeerd_pct: float | None
+    aantal_man: int
+    aantal_vrouw: int
+    aantal_vergelijkbare_functies: int
+
+
+def get_corrected_gender_pay_gap(as_of_date: date, filters: SalaryFilters) -> GenderPayGap:
+    """The Geslacht dimension-switcher option gives the raw, unadjusted
+    breakdown, same mechanism as every other dimension. This is the actual
+    equity metric Laura asked for: both the unadjusted gap (plain average,
+    the number usually quoted in pay-gap headlines) and an adjusted
+    ("like-for-like") gap that controls for Functie — computed within each
+    job title, then combined as a headcount-weighted average across every
+    job title where both genders are present. Job titles with only one
+    gender can't contribute a within-group comparison and are excluded from
+    the *adjusted* figure (but still count in the unadjusted one).
+
+    Deliberately not stratified by Dienstjaren too, on top of Functie: with
+    ~700 employees across ~60 job titles, splitting further by tenure band
+    would leave most cells with 0-2 people per gender — too sparse for a
+    meaningful average, not a genuine extra control. A full regression
+    (job + tenure + education simultaneously) would handle that properly,
+    but needs a stats library this project doesn't have yet; flagged as a
+    known limitation of this metric, not silently glossed over.
+
+    Restricted to 'M'/'F' — dim_employee also has 'Anders'/'Onbekend'
+    (12 people combined), too few for either side of a group comparison,
+    and not what a pay-gap metric conventionally reports on.
+    """
+    params = (as_of_date, *filters.as_sql_params())
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            WITH by_role_gender AS (
+                SELECT Functie_Naam, Geslacht, AVG(Salaris) AS Gem_Salaris, COUNT(*) AS Aantal
+                FROM mcp.fn_workforce_snapshot_asof({_ASOF_PARAM_PLACEHOLDERS})
+                WHERE Geslacht IN ('M', 'F')
+                GROUP BY Functie_Naam, Geslacht
+            ),
+            paired AS (
+                SELECT
+                    m.Gem_Salaris AS Man_Salaris, m.Aantal AS Man_Aantal,
+                    v.Gem_Salaris AS Vrouw_Salaris, v.Aantal AS Vrouw_Aantal
+                FROM by_role_gender m
+                JOIN by_role_gender v ON v.Functie_Naam = m.Functie_Naam AND v.Geslacht = 'F'
+                WHERE m.Geslacht = 'M'
+            )
+            SELECT
+                (SELECT AVG(Salaris) FROM mcp.fn_workforce_snapshot_asof({_ASOF_PARAM_PLACEHOLDERS})
+                 WHERE Geslacht = 'M') AS Gem_Man,
+                (SELECT AVG(Salaris) FROM mcp.fn_workforce_snapshot_asof({_ASOF_PARAM_PLACEHOLDERS})
+                 WHERE Geslacht = 'F') AS Gem_Vrouw,
+                (SELECT COUNT(*) FROM mcp.fn_workforce_snapshot_asof({_ASOF_PARAM_PLACEHOLDERS})
+                 WHERE Geslacht = 'M') AS Aantal_Man,
+                (SELECT COUNT(*) FROM mcp.fn_workforce_snapshot_asof({_ASOF_PARAM_PLACEHOLDERS})
+                 WHERE Geslacht = 'F') AS Aantal_Vrouw,
+                (SELECT COUNT(*) FROM paired) AS Aantal_Vergelijkbare_Functies,
+                (SELECT SUM((Man_Salaris - Vrouw_Salaris) * (Man_Aantal + Vrouw_Aantal))
+                 FROM paired) AS Gewogen_Verschil,
+                (SELECT SUM(Man_Salaris * (Man_Aantal + Vrouw_Aantal))
+                 FROM paired) AS Gewogen_Noemer
+            """,
+            params * 5,
+        )
+        row = cur.fetchone()
+        ongecorrigeerd = (
+            (row.Gem_Man - row.Gem_Vrouw) / row.Gem_Man
+            if row.Gem_Man and row.Gem_Vrouw
+            else None
+        )
+        gecorrigeerd = (
+            row.Gewogen_Verschil / row.Gewogen_Noemer
+            if row.Gewogen_Verschil is not None and row.Gewogen_Noemer
+            else None
+        )
+        return GenderPayGap(
+            ongecorrigeerd_pct=ongecorrigeerd,
+            gecorrigeerd_pct=gecorrigeerd,
+            aantal_man=row.Aantal_Man or 0,
+            aantal_vrouw=row.Aantal_Vrouw or 0,
+            aantal_vergelijkbare_functies=row.Aantal_Vergelijkbare_Functies or 0,
+        )
+
+
+def get_new_hire_vs_current(
+    as_of_date: date, dimension: str, filters: SalaryFilters
+) -> list[dict]:
+    """Average starting salary (an employee's very first recorded
+    fact_workforce_snapshot row, whenever that was) vs. their current
+    salary, grouped by an approved dimension — are new hires coming in at
+    a different level than what existing staff in the same group have
+    grown to over time? Only currently-active, rail-filtered employees are
+    included; "starting salary" itself is looked up unfiltered by the rail
+    (an employee's first snapshot might predate a since-changed department,
+    for instance), matching how get_lfl_growth_trend treats its own
+    retained-cohort comparison as a separate concern from the rail.
+    """
+    column = _validate_dimension(dimension)
+    params = (as_of_date, *filters.as_sql_params())
+
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            WITH first_snapshot AS (
+                SELECT Employee_Key, MIN(Snapshot_Date) AS First_Snapshot_Date
+                FROM dbo.fact_workforce_snapshot
+                GROUP BY Employee_Key
+            ),
+            start_salaris AS (
+                SELECT fs.Employee_Key, s.Salaris AS Start_Salaris
+                FROM first_snapshot AS fs
+                JOIN dbo.fact_workforce_snapshot AS s
+                    ON s.Employee_Key = fs.Employee_Key
+                   AND s.Snapshot_Date = fs.First_Snapshot_Date
+            )
+            SELECT
+                cur.{column} AS dimension_value,
+                AVG(ss.Start_Salaris) AS gem_start_salaris,
+                AVG(cur.Salaris) AS gem_huidig_salaris,
+                COUNT(*) AS aantal
+            FROM mcp.fn_workforce_snapshot_asof({_ASOF_PARAM_PLACEHOLDERS}) AS cur
+            JOIN start_salaris AS ss ON ss.Employee_Key = cur.Employee_Key
+            WHERE cur.{column} IS NOT NULL
+            GROUP BY cur.{column}
+            """,
+            params,
+        )
+        return _rows_as_dicts(cur)
+
+
 def _relabel_salaris_categorie(rows: list[dict]) -> list[dict]:
     """Swaps each row's Salaris_Categorie for the old PBIP's own numbered,
     qualitative salary-band name (SALARY_CATEGORY_DISPLAY) in place."""
@@ -245,22 +400,32 @@ def _relabel_salaris_categorie(rows: list[dict]) -> list[dict]:
 
 
 _EMPLOYEE_ROW_COLUMNS = (
-    "Employee_Key, Salaris, Salaris_Categorie, Benchmark_Ratio, Benchmark_Status, "
-    "Afdeling_Naam, Manager_Naam, Functie_Naam, Performance_Bin, Tevredenheidsband_Naam"
+    "Employee_Key, Medewerker_Naam, Salaris, Salaris_Werkelijk, Salaris_Categorie, "
+    "Benchmark_Ratio, Benchmark_Status, Afdeling_Naam, Manager_Naam, Functie_Naam, "
+    "Performance_Bin, Tevredenheidsband_Naam, Opleidingsniveau, Geslacht, Dienstjaren, "
+    "Compa_Ratio_Interne_Schaal"
 )
 
 
 def get_employee_rows(as_of_date: date, filters: SalaryFilters) -> list[dict]:
-    """One row per employee, rail-filtered only — every field a chart or a
-    click-to-highlight computation might need.
+    """One row per employee, rail-filtered only — every field a chart, the
+    employee detail table, or a click-to-highlight computation might need.
 
-    Two jobs: (1) Spreiding salaris bins Salaris client-side (Vega-Lite's
+    Four jobs: (1) Spreiding salaris bins Salaris client-side (Vega-Lite's
     own `bin` transform, the same approach used in the Vega-Lite/Plotly
-    comparison artifact, so the chart spec owns bin width, not this query);
+    comparison artifact, so the chart spec owns bin width, not this query),
+    and the same is true of Salaris vs. dienstjaren and the compa-ratio
+    histogram — both reuse this one array instead of their own queries;
     (2) salaris.html reuses this same array to recompute the KPI tiles for
     whatever's currently highlighted, entirely client-side (no server round
     trip per click — ARCHITECTURE.md, the connection-per-request cost is
-    real and a click-triggered reload was the reason it felt slow).
+    real and a click-triggered reload was the reason it felt slow); (3) the
+    total-payroll KPI sums Salaris_Werkelijk from here; (4) the "medewerkers
+    onder benchmark" detail page (pages.py's /salaris/medewerkers) reuses
+    this exact function rather than its own query — narrowing to "only
+    under benchmark" for that page happens in Python on the already-fetched,
+    already rail-filtered small in-memory list (well under a thousand rows),
+    not as a second SQL round trip for one extra boolean condition.
     """
     params = (as_of_date, *filters.as_sql_params())
     with get_connection() as conn:

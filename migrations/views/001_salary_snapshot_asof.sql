@@ -1,6 +1,6 @@
 -- ============================================================================
 -- mcp.fn_workforce_snapshot_asof(@as_of_date, @afdeling, @functie, @manager,
---                                 @opleidingsniveau, @salaris_categorie, @bron)
+--                                 @opleidingsniveau, @salaris_categorie)
 --
 -- The reusable "op peildatum" (as-of) pattern: one row per employee, their
 -- latest fact_workforce_snapshot row with Snapshot_Date <= @as_of_date.
@@ -11,11 +11,15 @@
 -- lookup. It's an inline table-valued FUNCTION, not a plain VIEW, because
 -- it needs to accept parameters — a plain view can't.
 --
--- All six filter parameters default to NULL ("no filter") and use the
+-- All five filter parameters default to NULL ("no filter") and use the
 -- standard `@param IS NULL OR column = @param` pattern — filtering happens
 -- in SQL, not by fetching everything and filtering in Python (§7.3), and
 -- every value is a bound parameter, never a string built from user input
--- (§7.4). These map directly to the Salaris page's filter rail.
+-- (§7.4). These map directly to the Salaris page's filter rail. A sixth
+-- param, @bron (recruitment source), existed here briefly but was removed —
+-- Laura, reviewing the page as an HR manager: recruitment source answers a
+-- recruitment question, not a compensation one, and doesn't belong on this
+-- page's filter rail at all.
 --
 -- Salaris_Categorie is the canonical definition from ARCHITECTURE.md §14.2:
 -- dim_salary_band's range-based intent, via a real BETWEEN comparison
@@ -30,6 +34,25 @@
 -- band", the same "prefer the person-level definition" reasoning as the
 -- tenure conflict in §14.1) — a minor bucketing default, not a headline
 -- business metric like salary category, so not logged as its own §14 entry.
+--
+-- Salaris_Werkelijk (Salaris × FTE): "Salaris" itself is already a
+-- full-time-equivalent annual figure, verified directly against the data
+-- (an Operations Director on 0.6 FTE still shows a full director-level
+-- Salaris, not 60% of it) — correct for pay-equity/benchmark comparisons,
+-- where mixing in part-time-adjusted pay would make every part-timer look
+-- underpaid regardless of actual fairness. Salaris_Werkelijk is the other,
+-- narrower use case: what someone is actually paid (payroll cost, a
+-- specific person's own detail view) — never used in the aggregate
+-- equity/benchmark visuals, only in the total-payroll KPI and the
+-- employee detail table.
+--
+-- Compa_Ratio_Interne_Schaal: position within the employee's *own* salary
+-- scale (dim_salary_scale — steps/min/max), 0 = scale minimum, 1 = scale
+-- maximum, uncapped in either direction since actually being paid outside
+-- one's nominal scale is a real, worth-seeing case, not a data error. This
+-- is a different question from Benchmark_Ratio (external market
+-- comparison) — "am I paid fairly for my internal level" vs. "am I paid
+-- competitively vs. the market" — and both are shown side by side.
 --
 -- Cross-visual interactivity (clicking a bar segment) is a client-side
 -- highlight, not a server-side filter — it fades unrelated marks in other
@@ -46,8 +69,7 @@ CREATE OR ALTER FUNCTION mcp.fn_workforce_snapshot_asof (
     @functie NVARCHAR(100) = NULL,
     @manager NVARCHAR(101) = NULL,
     @opleidingsniveau NVARCHAR(20) = NULL,
-    @salaris_categorie NVARCHAR(100) = NULL,
-    @bron NVARCHAR(100) = NULL
+    @salaris_categorie NVARCHAR(100) = NULL
 )
 RETURNS TABLE
 AS
@@ -55,6 +77,7 @@ RETURN
 (
     SELECT
         s.Employee_Key,
+        e.Voornaam + ' ' + e.Achternaam AS Medewerker_Naam,
         s.Snapshot_Date,
         s.Department_Key,
         d.Afdeling_Naam,
@@ -66,6 +89,7 @@ RETURN
         s.Contracturen,
         s.FTE,
         s.Salaris,
+        s.Salaris * s.FTE AS Salaris_Werkelijk,
         s.Benchmark_Salaris,
         s.Benchmark_Verschil,
         s.Benchmark_Status,
@@ -75,6 +99,15 @@ RETURN
         END AS Benchmark_Ratio,
         sb.SalaryBand_Key,
         sb.Salarisband_Naam AS Salaris_Categorie,
+        sca.SalaryScale_Key,
+        sca.Salarisschaal_Naam,
+        sca.Minimum_Salaris AS Schaal_Min_Salaris,
+        sca.Maximum_Salaris AS Schaal_Max_Salaris,
+        CASE WHEN sca.Maximum_Salaris > sca.Minimum_Salaris
+             THEN CAST(s.Salaris - sca.Minimum_Salaris AS DECIMAL(18, 4))
+                  / (sca.Maximum_Salaris - sca.Minimum_Salaris)
+             ELSE NULL
+        END AS Compa_Ratio_Interne_Schaal,
         s.Dienstjaren,
         s.Prestatie_Score,
         CASE
@@ -88,8 +121,7 @@ RETURN
         s.SatisfactionBand_Key,
         satb.Tevredenheidsband_Naam,
         e.Geslacht,
-        edu.Opleidingsniveau,
-        hs.Bron_Naam
+        edu.Opleidingsniveau
     FROM dbo.fact_workforce_snapshot AS s
     INNER JOIN (
         -- the actual "as-of" resolution: latest snapshot per employee on/before the date
@@ -106,15 +138,14 @@ RETURN
     LEFT JOIN dbo.dim_salary_band AS sb
         ON s.Salaris >= sb.Minimum_Salaris
        AND (s.Salaris <= sb.Maximum_Salaris OR sb.Maximum_Salaris IS NULL)
+    LEFT JOIN dbo.dim_salary_scale AS sca ON sca.SalaryScale_Key = s.SalaryScale_Key
     LEFT JOIN dbo.dim_satisfaction_band AS satb ON satb.SatisfactionBand_Key = s.SatisfactionBand_Key
     LEFT JOIN dbo.dim_employee AS e ON e.Employee_Key = s.Employee_Key
     LEFT JOIN dbo.dim_education AS edu ON edu.Education_Key = s.Education_Key
-    LEFT JOIN dbo.dim_hire_source AS hs ON hs.HireSource_Key = s.HireSource_Key
     WHERE (@afdeling IS NULL OR d.Afdeling_Naam = @afdeling)
       AND (@functie IS NULL OR r.Functie_Naam = @functie)
       AND (@manager IS NULL OR (m.Voornaam + ' ' + m.Achternaam) = @manager)
       AND (@opleidingsniveau IS NULL OR edu.Opleidingsniveau = @opleidingsniveau)
       AND (@salaris_categorie IS NULL OR sb.Salarisband_Naam = @salaris_categorie)
-      AND (@bron IS NULL OR hs.Bron_Naam = @bron)
 );
 GO

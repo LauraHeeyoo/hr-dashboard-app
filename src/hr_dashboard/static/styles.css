@@ -22,6 +22,18 @@ body {
     padding: 0 24px;
 }
 
+/* On the Salaris page (and any future page with its own drag/resize grid),
+   the navbar "floats" above the tile area instead of sitting flush against
+   the browser edges: same left/right inset as the tile area itself (5%,
+   matching .app-main:has(.grid-stack) below) so their edges line up, plus
+   some breathing room above, and rounded corners like the tiles — but
+   deliberately no border (Laura: rounded corners yes, the tiles' teal
+   border no). Every other page keeps the plain edge-to-edge header. */
+body:has(.grid-stack) .app-header {
+    margin: 20px 5% 0;
+    border-radius: 10px;
+}
+
 .app-nav {
     display: flex;
     gap: 4px;
@@ -52,15 +64,19 @@ body {
     padding: 24px;
 }
 
-.page-layout {
-    display: grid;
-    grid-template-columns: 220px 1fr;
-    gap: 20px;
-    align-items: start;
-}
-
-@media (max-width: 900px) {
-    .page-layout { grid-template-columns: 1fr; }
+/* The drag-and-resize Salaris dashboard wants to use the visitor's actual
+   screen, not a fixed reading-width column — there's nothing to "read" on
+   this page, just tiles the visitor arranges themselves, so capping the
+   width at a fixed 1400px (like every other page) just wastes space on a
+   wide monitor. But full edge-to-edge turned out to be too much of a good
+   thing on a really large screen — 5% left/right keeps a bit of breathing
+   room there, while staying practically unnoticeable on a phone/tablet
+   (5% of 400px is 20px), so there's no need for a separate small-screen
+   rule. Every other page keeps the 1400px cap and its own 24px padding. */
+.app-main:has(.grid-stack) {
+    max-width: none;
+    padding-left: 5%;
+    padding-right: 5%;
 }
 
 .filter-rail {
@@ -70,16 +86,24 @@ body {
     padding: 16px;
 }
 
-.filter-rail h3 {
-    font-size: 0.8rem;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--text-muted);
-    margin: 0 0 12px;
+/* The filter rail is itself a resizable tile now (salaris.html) — instead
+   of always stacking every field in one tall column regardless of the
+   tile's own width/height (Laura: on a short-and-wide tile that forced an
+   internal scrollbar for no reason), the fields wrap like normal text: as
+   many fit per row at their own fixed-ish width, however many rows that
+   takes. #filter-form is shared with the narrower, fixed-width detail-page
+   rail (salaris_medewerkers.html) too — there it's simply never wide
+   enough to fit more than one field per row, so it still renders as a
+   single column, unchanged. */
+#filter-form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
 }
 
 .filter-field {
-    margin-bottom: 12px;
+    flex: 1 1 150px;
+    min-width: 150px;
 }
 
 .filter-field label {
@@ -102,7 +126,10 @@ body {
 .filter-actions {
     display: flex;
     gap: 8px;
-    margin-top: 16px;
+    /* Always its own full-width row below the wrapped fields, whatever
+       column count they happened to wrap into. */
+    flex-basis: 100%;
+    margin-top: 4px;
 }
 
 .btn {
@@ -243,20 +270,56 @@ body {
     margin-top: 6px;
 }
 
+/* "Vraag het aan de data" chat tile. */
+.chat-form {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.chat-input {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 7px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-family: inherit;
+}
+
+.chat-answer {
+    font-size: 0.88rem;
+    color: var(--text);
+    margin-bottom: 10px;
+}
+
+/* A single-figure answer (see chat-value in salaris.html) reuses the same
+   .kpi-value/.kpi-label typography every KPI tile already uses, so it
+   reads as "a number the dashboard is telling you", not a chart caption. */
+.chat-value-card {
+    margin-bottom: 10px;
+}
+
 .page-title {
     font-size: 1.4rem;
     margin: 0 0 20px;
 }
 
-.kpi-row {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 16px;
+.page-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
     margin-bottom: 20px;
 }
 
-@media (max-width: 800px) {
-    .kpi-row { grid-template-columns: repeat(2, 1fr); }
+.page-title-row .page-title {
+    margin-bottom: 0;
+}
+
+.page-title-actions {
+    display: flex;
+    gap: 8px;
 }
 
 .kpi-card {
@@ -278,15 +341,149 @@ body {
     margin-top: 4px;
 }
 
-.chart-row {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 16px;
-    margin-bottom: 20px;
+/* "Aantal medewerkers" / "% onder benchmark" drill through to the employee
+   detail table — the whole tile is the click target, styled the same as
+   any other tile at rest so the affordance reads as "clickable card", not
+   "card containing a link". */
+.kpi-card-clickable {
+    padding: 0;
+    transition: box-shadow 0.15s ease;
 }
 
-@media (max-width: 900px) {
-    .chart-row { grid-template-columns: 1fr; }
+.kpi-card-clickable a {
+    display: block;
+    padding: 18px;
+    color: inherit;
+    text-decoration: none;
+}
+
+.kpi-card-clickable:hover {
+    box-shadow: 0 0 0 2px var(--teal);
+}
+
+/* --- Drag-and-resize dashboard (/salaris only) --------------------------
+   Every KPI tile, chart and the filter rail is a .grid-stack-item-content,
+   which gridstack.js already positions/sizes absolutely to fill its
+   .grid-stack-item (whatever the user dragged/resized it to). These rules
+   turn that sized box into a flex column so a chart's title/switcher stays
+   a fixed size and the chart itself (.chart-canvas/.chart-scroll) stretches
+   to fill whatever's left — the same tile can be tiny or huge, the chart
+   just fills whatever room it's given (see chart-canvas's resize-on-drag
+   handling in salaris.html). */
+.grid-stack-item-content.kpi-card,
+.grid-stack-item-content.chart-card,
+.grid-stack-item-content.filter-rail {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.grid-stack-item-content.kpi-card {
+    justify-content: center;
+}
+
+.grid-stack-item-content.kpi-card-clickable a {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.grid-stack-item-content.filter-rail {
+    overflow-y: auto;
+}
+
+.grid-stack-item-content.chart-card > h2,
+.grid-stack-item-content.chart-card > .dimension-switcher,
+.grid-stack-item-content.chart-card > .lfl-header,
+.grid-stack-item-content.chart-card > .lfl-range {
+    flex: 0 0 auto;
+}
+
+.chart-canvas,
+.grid-stack-item-content.chart-card > .chart-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.chart-scroll .chart-canvas {
+    flex: none;
+    width: 100%;
+    /* Deliberately no height:100% here by default — chart-headcount/
+       chart-benchmark/chart-new-hire use a fixed per-row step height in
+       their Vega-Lite spec (salaris.html), not "container", so their real
+       rendered height grows with the category count. Left at its natural
+       (content) height, a short list just leaves empty space below it in
+       the tile, and a long one (Manager instead of Afdeling) overflows
+       .chart-scroll instead of being squeezed into unreadable, overlapping
+       labels — .chart-scroll's own overflow-y:auto is what turns that into
+       a scrollbar rather than a mess. */
+}
+
+/* The chat tile's #chat-chart is the one .chart-scroll-wrapped canvas
+   that switches between the two height modes at runtime, depending on
+   which measure the last question resolved to (salaris.html sets/clears
+   this same data-fixed-row-height attribute the other three charts
+   always carry statically) — a "container"-height spec (the salarisgroei
+   trend line, or no chart yet) needs the opposite of the rule above: a
+   real, definite height to measure itself against, or Vega just renders
+   at ~0 since the container's own natural height is empty before
+   anything's been drawn into it yet.  */
+.chart-scroll .chart-canvas:not([data-fixed-row-height]) {
+    height: 100%;
+}
+
+/* The small drag handle — gridstack only starts a drag from here (see
+   `handle: ".tile-grip"` in salaris.html), so clicking anywhere else in a
+   tile (a KPI's own drill-through link, a chart's tooltip/highlight click,
+   a filter <select>) is completely undisturbed by the drag-and-resize
+   mechanism. A plain CSS dot-grid, not an icon font or emoji. */
+.tile-grip {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 18px;
+    height: 18px;
+    opacity: 0.3;
+    cursor: grab;
+    z-index: 1;
+}
+
+.tile-grip::before {
+    content: "";
+    display: block;
+    width: 100%;
+    height: 100%;
+    background-image: radial-gradient(circle, var(--text-muted) 1.2px, transparent 1.3px);
+    background-size: 6px 6px;
+}
+
+.tile-grip:hover {
+    opacity: 0.7;
+}
+
+.tile-grip:active {
+    cursor: grabbing;
+}
+
+/* A small "?" badge next to a KPI label or chart title — hover/focus shows
+   the browser's native title tooltip with the metric's methodology, for an
+   HR manager without technical background (Laura's own framing when
+   reviewing this page) who wouldn't otherwise know what "benchmark" or
+   "compa-ratio" means. */
+.tooltip-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 1px solid var(--text-muted);
+    color: var(--text-muted);
+    font-size: 0.68rem;
+    font-weight: 700;
+    cursor: help;
+    margin-left: 2px;
 }
 
 .chart-card {
@@ -297,42 +494,13 @@ body {
     min-width: 0;
 }
 
-.chart-card-wide {
-    grid-column: 1 / -1;
-}
-
-/* The paired "Aantal medewerkers" / "Verdeling salaris t.o.v. benchmark"
-   section: one shared dimension-switcher above two charts side by side.
-   Both are horizontal bar charts (category per row, quantitative axis
-   along the width) — the value axis always fits the column, so there's
-   never a "tile bigger than the chart" mismatch; only the row count grows
-   with the category count, so a fixed-height .chart-scroll below handles
-   that with a vertical scrollbar instead of a horizontal one. */
-.dimension-charts {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 24px;
-    margin-top: 4px;
-}
-
-@media (max-width: 900px) {
-    .dimension-charts { grid-template-columns: 1fr; }
-}
-
-.dimension-chart-col h3 {
-    font-size: 0.85rem;
-    font-weight: 600;
-    color: var(--text-muted);
-    margin: 0 0 10px;
-}
-
-.dimension-chart-col {
-    min-width: 0;
-}
-
 .chart-scroll {
     overflow-y: auto;
-    max-height: 400px;
+    /* Harmless for a chart (width:"container" never overflows
+       horizontally) — this is really for the medewerkers detail table,
+       which can have more columns than the tile is wide. */
+    overflow-x: auto;
+    position: relative;
 }
 
 .chart-card h2 {
@@ -341,13 +509,64 @@ body {
     color: var(--text);
 }
 
+.page-title-count {
+    color: var(--text-muted);
+    font-weight: 400;
+}
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+    white-space: nowrap;
+}
+
+.data-table th,
+.data-table td {
+    padding: 8px 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+}
+
+.data-table th {
+    color: var(--text-muted);
+    font-weight: 600;
+    background: var(--page-bg);
+    position: sticky;
+    top: 0;
+}
+
+.data-table td.num,
+.data-table th.num {
+    text-align: right;
+}
+
+.data-table tbody tr:hover {
+    background: var(--page-bg);
+}
+
 .app-footer {
     display: flex;
     justify-content: space-between;
+    align-items: center;
     padding: 16px 24px;
     color: var(--text-muted);
     font-size: 0.8rem;
     border-top: 1px solid var(--border);
     max-width: 1200px;
     margin: 0 auto;
+}
+
+/* Same reasoning as .app-header above — line the footer's edges up with
+   the tile area's own 5% inset instead of its own separate (and, pre-
+   existing, slightly different) 1200px cap. */
+body:has(.grid-stack) .app-footer {
+    max-width: none;
+    margin-left: 5%;
+    margin-right: 5%;
+}
+
+.app-footer-logo {
+    height: 22px;
+    width: auto;
 }

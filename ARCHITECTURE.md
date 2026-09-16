@@ -411,6 +411,16 @@ Each conflict below is resolved only when the domain/page that actually uses it 
 - `Gemiddeld salaris vs benchmark %` vs. `Gemiddeld salaris vs benchmark huidig` — per the original Power BI review, these are two distinct, both-needed measures, not a duplicate pair. Migrate both, with distinct names.
 - `TODAY()`-volatile calculated columns (age, several tenure variants, `fact_vacancy[Dagen open]`) — no single universal answer; decide per measure/view, during its own migration, whether "as of right now" or "as of the selected Peildatum" is correct.
 
+### 14.4 Application-code reuse — not semantic-model debt, but tracked here anyway (open, not a Phase 1 blocker)
+
+Unlike 14.1–14.3, this isn't a conflict inherited from the old Power BI model — it's interaction code built during Phase 1 (Salaris) that's generic in principle but currently only exists inline in `salaris.html`/`salary.py`, specific to that page's chart IDs and field names:
+
+- **Click-to-highlight** (`wireHighlight`, `matchExpr`, the shared opacity/order encoding constants) — dims non-matching marks across independently-embedded Vega-Lite charts and recomputes KPI tiles client-side, no server round trip.
+- **Granularity toggle + dual-range slider** for time-series charts (the LFL trend's Maand/Jaar control) — client-side re-slicing of an already-loaded full-history dataset.
+- **Cross-filtered filter-rail dropdowns** (`get_filter_options`'s pattern: each field's own option list computed with only that field's filter cleared) — the mechanism is generic, but today's implementation is written against Salaris's specific six filter fields.
+- **Decision:** deliberately **not** extracted into a shared module yet — doing that from a single example (Salaris) risks guessing the wrong shape and reworking it anyway once a second page's real needs are known. The code is already factored into small, named functions rather than tangled inline logic, so extracting it later should be a move, not a rewrite.
+- **Status:** open. Resolve at the start of Phase 4 (§13, "remaining pages/domains") — do a short extraction pass (shared JS module for the chart-interaction patterns; shared Python helpers for the cross-filtering pattern) *before* writing the next page's page-specific code, so that page uses the shared version from day one instead of becoming another copy to reconcile later.
+
 ---
 
 ## 15. Repository / project structure — revised

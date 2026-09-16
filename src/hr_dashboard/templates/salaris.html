@@ -1,18 +1,22 @@
-{% extends "base.html" %}
+{% extends "dashboard_base.html" %}
 {% block title %}Salaris — HR Dashboard{% endblock %}
+{% block grid_layout_key %}salarisGridLayout{% endblock %}
+{% block page_title %}Salaris{% endblock %}
 
-{% block head %}
+{% block page_actions %}
+<a href="{{ medewerkers_urls.alle }}" class="btn btn-secondary">Detailweergave</a>
+{% endblock %}
+
+{% block dashboard_head %}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/vega/6.4.0/vega.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/vega-lite/6.4.3/vega-lite.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/vega-embed/7.2.0/vega-embed.min.js"></script>
 {% endblock %}
 
-{% block content %}
-<h1 class="page-title">Salaris</h1>
-
-<div class="page-layout">
-    <aside class="filter-rail">
-        <h3>Filters</h3>
+{% block tiles %}
+<div class="grid-stack-item" gs-id="filter-rail" gs-x="0" gs-y="0" gs-w="3" gs-h="11">
+    <aside class="grid-stack-item-content filter-rail">
+        <span class="tile-grip"></span>
         <form method="get" action="/salaris" id="filter-form">
             <div class="filter-field">
                 <label for="as_of">Peildatum</label>
@@ -63,144 +67,256 @@
                     {% endfor %}
                 </select>
             </div>
-            <div class="filter-field">
-                <label for="bron">Recruitment (bron)</label>
-                <select id="bron" name="bron">
-                    <option value="">Alle</option>
-                    {% for opt in filter_options.bron %}
-                    <option value="{{ opt }}" {% if filters.bron == opt %}selected{% endif %}>{{ opt }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <input type="hidden" name="dimension" value="{{ dimension }}">
+            <input type="hidden" name="dim_headcount" value="{{ dim_headcount }}">
+            <input type="hidden" name="dim_benchmark" value="{{ dim_benchmark }}">
+            <input type="hidden" name="dim_new_hire" value="{{ dim_new_hire }}">
             <div class="filter-actions">
                 <button type="submit" class="btn btn-primary">Toepassen</button>
                 <a href="/salaris" class="btn btn-secondary">Wissen</a>
             </div>
         </form>
     </aside>
+</div>
 
-    <div class="page-content">
-        <section class="kpi-row">
-            <div class="kpi-card">
-                <div class="kpi-value" id="kpi-median-salaris">
-                    {% if kpis.median_salaris %}€{{ "{:,.0f}".format(kpis.median_salaris).replace(",", ".") }}{% else %}—{% endif %}
-                </div>
-                <div class="kpi-label">Mediaan salaris</div>
-            </div>
-            <div class="kpi-card">
-                <div class="kpi-value" id="kpi-benchmark-ratio">
-                    {% if kpis.gemiddeld_benchmark_ratio %}{{ "{:.1f}".format(kpis.gemiddeld_benchmark_ratio * 100) }}%{% else %}—{% endif %}
-                </div>
-                <div class="kpi-label">Gemiddeld t.o.v. benchmark</div>
-            </div>
-            <div class="kpi-card">
-                <div class="kpi-value" id="kpi-pct-onder-benchmark">
-                    {% if kpis.pct_onder_benchmark %}{{ "{:.1f}".format(kpis.pct_onder_benchmark * 100) }}%{% else %}—{% endif %}
-                </div>
-                <div class="kpi-label">% medewerkers onder benchmark</div>
-            </div>
-            <div class="kpi-card">
-                <div class="kpi-value" id="kpi-aantal-medewerkers">{{ kpis.aantal_medewerkers }}</div>
-                <div class="kpi-label">Actieve medewerkers</div>
-            </div>
-        </section>
-
-        <section class="chart-row">
-            <div class="chart-card chart-card-wide">
-                <h2>Spreiding salaris</h2>
-                <div id="chart-distribution"></div>
-            </div>
-        </section>
-
-        <section class="chart-row">
-            <div class="chart-card chart-card-wide">
-                <div class="dimension-switcher">
-                    {% for key, label in dimension_options.items() %}
-                    <a href="{{ dimension_urls[key] }}" class="dimension-pill {% if dimension == key %}active{% endif %}">{{ label }}</a>
-                    {% endfor %}
-                </div>
-                <div class="dimension-charts">
-                    <div class="dimension-chart-col">
-                        <h3>Aantal medewerkers, per {{ by_dimension_title|lower }}</h3>
-                        <div class="chart-scroll">
-                            <div id="chart-headcount"></div>
-                        </div>
-                    </div>
-                    <div class="dimension-chart-col">
-                        <h3>Verdeling salaris t.o.v. benchmark, per {{ by_dimension_title|lower }}</h3>
-                        <div class="chart-scroll">
-                            <div id="chart-benchmark"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <section class="chart-row">
-            <div class="chart-card chart-card-wide">
-                <div class="lfl-header">
-                    <h2>Gemiddelde salarisgroei like-for-like (YoY)</h2>
-                    <div class="lfl-granularity">
-                        <button type="button" class="dimension-pill active" data-granularity="month">Maand</button>
-                        <button type="button" class="dimension-pill" data-granularity="year">Jaar</button>
-                    </div>
-                </div>
-                <div id="chart-lfl"></div>
-                <div class="lfl-range">
-                    <div class="lfl-range-slider">
-                        <input type="range" id="lfl-range-start" min="0" max="0" value="0">
-                        <input type="range" id="lfl-range-end" min="0" max="0" value="0">
-                    </div>
-                    <div class="lfl-range-labels">
-                        <span id="lfl-range-start-label"></span>
-                        <span id="lfl-range-end-label"></span>
-                    </div>
-                </div>
-            </div>
-        </section>
+<div class="grid-stack-item" gs-id="kpi-mediaan" gs-x="3" gs-y="0" gs-w="3" gs-h="3">
+    <div class="grid-stack-item-content kpi-card">
+        <span class="tile-grip"></span>
+        <div class="kpi-value" id="kpi-median-salaris">
+            {% if kpis.median_salaris %}€{{ "{:,.0f}".format(kpis.median_salaris).replace(",", ".") }}{% else %}—{% endif %}
+        </div>
+        <div class="kpi-label">Mediaan salaris</div>
     </div>
 </div>
 
-<script>
-// Auto-refresh: a filter change submits the form immediately, no need to
-// click "Toepassen" first (kept as a fallback for non-JS/keyboard use).
-document.querySelectorAll('#filter-form select, #filter-form input[type="date"]').forEach((el) => {
-    el.addEventListener('change', () => el.form.submit());
-});
+<div class="grid-stack-item" gs-id="kpi-benchmark-ratio" gs-x="6" gs-y="0" gs-w="3" gs-h="3">
+    <div class="grid-stack-item-content kpi-card">
+        <span class="tile-grip"></span>
+        <div class="kpi-value" id="kpi-benchmark-ratio">
+            {% if kpis.gemiddeld_benchmark_ratio %}{{ "{:.1f}".format(kpis.gemiddeld_benchmark_ratio * 100) }}%{% else %}—{% endif %}
+        </div>
+        <div class="kpi-label">
+            Gemiddeld t.o.v. benchmark
+            <span class="tooltip-icon" tabindex="0" title="De benchmark is het externe marktsalaris voor dezelfde functie, zoals vastgelegd in fact_salary_benchmark (bijvoorbeeld o.b.v. een salarisbenchmark-onderzoek per functiegroep). Dit percentage zet het eigen salaris (Salaris, voltijd-equivalent) af tegen dat marktcijfer — 100% betekent exact op de markt, lager betekent onder de markt.">?</span>
+        </div>
+    </div>
+</div>
 
+<div class="grid-stack-item" gs-id="kpi-onder-benchmark" gs-x="9" gs-y="0" gs-w="3" gs-h="3">
+    <div class="grid-stack-item-content kpi-card kpi-card-clickable">
+        <span class="tile-grip"></span>
+        <a href="{{ medewerkers_urls.onder_benchmark }}">
+            <div class="kpi-value" id="kpi-pct-onder-benchmark">
+                {% if kpis.pct_onder_benchmark %}{{ "{:.1f}".format(kpis.pct_onder_benchmark * 100) }}%{% else %}—{% endif %}
+            </div>
+            <div class="kpi-label">% medewerkers onder benchmark</div>
+        </a>
+    </div>
+</div>
+
+<div class="grid-stack-item" gs-id="kpi-aantal" gs-x="3" gs-y="3" gs-w="3" gs-h="3">
+    <div class="grid-stack-item-content kpi-card kpi-card-clickable">
+        <span class="tile-grip"></span>
+        <a href="{{ medewerkers_urls.alle }}">
+            <div class="kpi-value" id="kpi-aantal-medewerkers">{{ kpis.aantal_medewerkers }}</div>
+            <div class="kpi-label">Actieve medewerkers</div>
+        </a>
+    </div>
+</div>
+
+<div class="grid-stack-item" gs-id="kpi-loonsom" gs-x="6" gs-y="3" gs-w="3" gs-h="3">
+    <div class="grid-stack-item-content kpi-card">
+        <span class="tile-grip"></span>
+        <div class="kpi-value" id="kpi-totale-loonsom">
+            €{{ "{:,.0f}".format(total_payroll).replace(",", ".") }}
+        </div>
+        <div class="kpi-label">
+            Totale loonsom
+            <span class="tooltip-icon" tabindex="0" title="Som van het werkelijk uitbetaalde salaris (Salaris x FTE) van alle actieve medewerkers op de peildatum — niet het voltijd-equivalent dat de rest van deze pagina gebruikt, want dat zou de loonkosten overschatten voor iedereen die niet 100% werkt.">?</span>
+        </div>
+    </div>
+</div>
+
+<div class="grid-stack-item" gs-id="kpi-paygap" gs-x="9" gs-y="3" gs-w="3" gs-h="3">
+    <div class="grid-stack-item-content kpi-card">
+        <span class="tile-grip"></span>
+        <div class="kpi-value" id="kpi-gender-pay-gap">
+            {% if gender_pay_gap.gecorrigeerd_pct is not none %}{{ "{:.1f}".format(gender_pay_gap.gecorrigeerd_pct * 100) }}%{% else %}—{% endif %}
+        </div>
+        <div class="kpi-label">
+            Gecorrigeerde loonkloof (m/v)
+            <span class="tooltip-icon" tabindex="0" title="Gecorrigeerd voor functie: per functietitel met zowel mannelijke als vrouwelijke medewerkers wordt het gemiddelde salarisverschil berekend, en die verschillen worden gewogen naar koppen samengevoegd. Ongecorrigeerd (simpel gemiddelde m.v.): {{ '{:.1f}'.format(gender_pay_gap.ongecorrigeerd_pct * 100) if gender_pay_gap.ongecorrigeerd_pct is not none else '—' }}%. Gebaseerd op {{ gender_pay_gap.aantal_man }} mannelijke en {{ gender_pay_gap.aantal_vrouw }} vrouwelijke medewerkers over {{ gender_pay_gap.aantal_vergelijkbare_functies }} vergelijkbare functies.">?</span>
+        </div>
+    </div>
+</div>
+
+<div class="grid-stack-item" gs-id="chart-distribution" gs-x="3" gs-y="6" gs-w="9" gs-h="5">
+    <div class="grid-stack-item-content chart-card">
+        <span class="tile-grip"></span>
+        <h2>Spreiding salaris</h2>
+        <div id="chart-distribution" class="chart-canvas"></div>
+    </div>
+</div>
+
+<div class="grid-stack-item" gs-id="chart-tenure" gs-x="3" gs-y="11" gs-w="9" gs-h="5">
+    <div class="grid-stack-item-content chart-card">
+        <span class="tile-grip"></span>
+        <h2>Salaris versus dienstjaren</h2>
+        <div id="chart-tenure" class="chart-canvas"></div>
+    </div>
+</div>
+
+<div class="grid-stack-item" gs-id="chart-comparatio" gs-x="3" gs-y="16" gs-w="9" gs-h="5">
+    <div class="grid-stack-item-content chart-card">
+        <span class="tile-grip"></span>
+        <h2>
+            Positie in eigen salarisschaal (compa-ratio)
+            <span class="tooltip-icon" tabindex="0" title="0% = onderkant van de eigen salarisschaal (dim_salary_scale), 100% = bovenkant. Dit is een ander vraagstuk dan de benchmark hierboven: dit zet iemands salaris af tegen de interne schaal voor die functie/niveau, niet tegen de externe markt.">?</span>
+        </h2>
+        <div id="chart-comparatio" class="chart-canvas"></div>
+    </div>
+</div>
+
+<div class="grid-stack-item" gs-id="chart-headcount" gs-x="3" gs-y="21" gs-w="9" gs-h="6">
+    <div class="grid-stack-item-content chart-card">
+        <span class="tile-grip"></span>
+        <div class="dimension-switcher">
+            {% for key, label in dimension_options.items() %}
+            <a href="{{ headcount_dimension_urls[key] }}" class="dimension-pill {% if dim_headcount == key %}active{% endif %}">{{ label }}</a>
+            {% endfor %}
+        </div>
+        <h2>Aantal medewerkers, per {{ headcount_title|lower }}</h2>
+        <div class="chart-scroll">
+            <div id="chart-headcount" class="chart-canvas" data-fixed-row-height></div>
+        </div>
+    </div>
+</div>
+
+<div class="grid-stack-item" gs-id="chart-benchmark" gs-x="3" gs-y="27" gs-w="9" gs-h="6">
+    <div class="grid-stack-item-content chart-card">
+        <span class="tile-grip"></span>
+        <div class="dimension-switcher">
+            {% for key, label in dimension_options.items() %}
+            <a href="{{ benchmark_dimension_urls[key] }}" class="dimension-pill {% if dim_benchmark == key %}active{% endif %}">{{ label }}</a>
+            {% endfor %}
+        </div>
+        <h2>Verdeling salaris t.o.v. benchmark, per {{ benchmark_title|lower }}</h2>
+        <div class="chart-scroll">
+            <div id="chart-benchmark" class="chart-canvas" data-fixed-row-height></div>
+        </div>
+    </div>
+</div>
+
+<div class="grid-stack-item" gs-id="chart-new-hire" gs-x="3" gs-y="33" gs-w="9" gs-h="6">
+    <div class="grid-stack-item-content chart-card">
+        <span class="tile-grip"></span>
+        <div class="dimension-switcher">
+            {% for key, label in dimension_options.items() %}
+            <a href="{{ new_hire_dimension_urls[key] }}" class="dimension-pill {% if dim_new_hire == key %}active{% endif %}">{{ label }}</a>
+            {% endfor %}
+        </div>
+        <h2>Startsalaris versus huidig salaris, per {{ new_hire_title|lower }}</h2>
+        <div class="chart-scroll">
+            <div id="chart-new-hire" class="chart-canvas" data-fixed-row-height></div>
+        </div>
+    </div>
+</div>
+
+<div class="grid-stack-item" gs-id="chart-lfl" gs-x="3" gs-y="39" gs-w="9" gs-h="6">
+    <div class="grid-stack-item-content chart-card">
+        <span class="tile-grip"></span>
+        <div class="lfl-header">
+            <h2>Gemiddelde salarisgroei like-for-like (YoY)</h2>
+            <div class="lfl-granularity">
+                <button type="button" class="dimension-pill active" data-granularity="month">Maand</button>
+                <button type="button" class="dimension-pill" data-granularity="year">Jaar</button>
+            </div>
+        </div>
+        <div id="chart-lfl" class="chart-canvas"></div>
+        <div class="lfl-range">
+            <div class="lfl-range-slider">
+                <input type="range" id="lfl-range-start" min="0" max="0" value="0">
+                <input type="range" id="lfl-range-end" min="0" max="0" value="0">
+            </div>
+            <div class="lfl-range-labels">
+                <span id="lfl-range-start-label"></span>
+                <span id="lfl-range-end-label"></span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="grid-stack-item" gs-id="chat" gs-x="3" gs-y="45" gs-w="9" gs-h="7">
+    <div class="grid-stack-item-content chart-card">
+        <span class="tile-grip"></span>
+        <h2>Vraag het aan de data</h2>
+        <form id="chat-form" class="chat-form">
+            <input type="text" id="chat-input" class="chat-input"
+                   placeholder="Bijvoorbeeld: wat is de mediaan salaris in Productie?" autocomplete="off">
+            <button type="submit" class="btn btn-primary">Vraag</button>
+        </form>
+        <div id="chat-answer" class="chat-answer">
+            Stel een vraag over de salarisdata — bijvoorbeeld over een KPI, een uitsplitsing per
+            afdeling/functie/manager/opleidingsniveau/geslacht/performance/tevredenheid, of de
+            salarisgroei over tijd.
+        </div>
+        <div id="chat-value-card" class="chat-value-card" style="display: none;">
+            <div class="kpi-value" id="chat-value"></div>
+            <div class="kpi-label" id="chat-value-label"></div>
+        </div>
+        <div class="chart-scroll">
+            <div id="chat-chart" class="chart-canvas" style="display: none;"></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block dashboard_script %}
 const employeeRows = {{ employee_rows_json | safe }};
 const headcountByDimensionData = {{ headcount_by_dimension_json | safe }};
 const benchmarkByDimensionData = {{ benchmark_by_dimension_json | safe }};
 const lflTrendMonthly = {{ lfl_trend_monthly_json | safe }};
 const lflTrendYearly = {{ lfl_trend_yearly_json | safe }};
+const newHireVsCurrentData = {{ new_hire_vs_current_json | safe }};
 
-// The dimension currently selected in the switcher, and which raw
-// employee-row field it corresponds to (e.g. "manager" -> "Manager_Naam")
-// — salary.py's DIMENSION_COLUMNS serialized once, so this never drifts
-// out of sync with the Python side.
-const currentDimension = "{{ dimension }}";
+// salary.py's DIMENSION_COLUMNS (key -> real SQL column name), serialized
+// once so the three independent dimension-switchers below can each turn
+// their own selected key (e.g. "manager") into the real employee-row field
+// name (e.g. "Manager_Naam") without duplicating that allowlist in JS.
 const dimensionColumns = {{ dimension_columns_json | safe }};
 
 // --- Click-to-highlight ------------------------------------------------
-// Clicking a bar segment fades everything that doesn't match it, in every
+// Clicking a bar/point fades everything that doesn't match it, in every
 // chart, and recomputes the KPI tiles for just the highlighted subset —
-// nothing disappears and no server round trip happens (ARCHITECTURE.md —
-// Laura: this replaced an earlier version where a click applied a real
-// SQL filter, which doesn't match how Power BI's own cross-highlight
-// actually behaves, and required a full page reload per click).
+// nothing disappears and no server round trip happens.
 //
-// Each chart keeps its own vegaEmbed() call / own HTML tile — there's no
-// single combined spec — but all of them read the same "hl" signal
-// (a plain Vega-Lite value parameter, not a selection), which this code
-// pushes into every chart's view after a click in any one of them.
-let currentHighlight = null; // {dimVal, colorField, colorVal} | null
+// The highlight signal is {field, value, colorField, colorVal} | null:
+// `field` is always a REAL employee-row column name (e.g. "Afdeling_Naam"),
+// never a chart-specific alias — this used to be resolved through one
+// shared "current dimension" global, but now that "Aantal medewerkers",
+// "Verdeling t.o.v. benchmark" and "Startsalaris versus huidig" each have
+// their own independent dimension-switcher (every tile should be able to
+// stand on its own now that tiles are freely draggable/resizable), there's
+// no single "the current dimension" left to resolve through. Each of
+// those three charts instead emits its OWN real column name directly (via
+// dimensionColumns[itsOwnSelectedKey]) when a bar is clicked, and every
+// other chart just checks `row[hl.field] === hl.value` — no lookup
+// needed. A raw per-employee chart (Spreiding salaris, Salaris versus
+// dienstjaren, compa-ratio) already carries every real column on every
+// row, so this check works regardless of which of the three switchers
+// produced the highlight.
+//
+// This whole mechanism (and _vegaView, read by dashboard_base.html's
+// shared resize observer) is specific to this page — a page with just one
+// or two independent charts (like the medewerkers detail table has none)
+// doesn't need any of this.
+let currentHighlight = null;
 const highlightViews = [];
 
 function sameHighlight(a, b) {
     if (a === b) return true;
     if (!a || !b) return false;
-    return a.dimVal === b.dimVal && a.colorField === b.colorField && a.colorVal === b.colorVal;
+    return a.field === b.field && a.value === b.value
+        && a.colorField === b.colorField && a.colorVal === b.colorVal;
 }
 
 function setHighlight(next) {
@@ -212,17 +328,24 @@ function setHighlight(next) {
     updateKpisForHighlight();
 }
 
-function wireHighlight(viewPromise, { dimensionField, colorField }) {
+// `field`, when given, is the real column name THIS chart's click should
+// emit (e.g. "Afdeling_Naam") — only the three dimension-grouped charts
+// pass it, reading the value from their row's generic "dimension_value"
+// alias. `colorField` is a real column name to read a color-based value
+// from directly (e.g. "Salaris_Categorie").
+function wireHighlight(viewPromise, elementId, { field, colorField } = {}) {
     viewPromise.then((result) => {
         highlightViews.push(result.view);
+        document.getElementById(elementId)._vegaView = result.view;
         result.view.addEventListener("click", (event, item) => {
             if (!item || !item.datum) {
                 setHighlight(null);
                 return;
             }
-            const next = { dimVal: null, colorField: null, colorVal: null };
-            if (dimensionField && item.datum[dimensionField] !== undefined) {
-                next.dimVal = item.datum[dimensionField];
+            const next = { field: null, value: null, colorField: null, colorVal: null };
+            if (field && item.datum.dimension_value !== undefined) {
+                next.field = field;
+                next.value = item.datum.dimension_value;
             }
             if (colorField && item.datum[colorField] !== undefined) {
                 next.colorField = colorField;
@@ -237,6 +360,12 @@ function wireHighlight(viewPromise, { dimensionField, colorField }) {
 // highlighted subset never touches the server. When nothing is
 // highlighted, the tiles just show the server-rendered baseline again
 // (captured once, up front) rather than recomputing it a second way.
+// Totale loonsom and de gecorrigeerde loonkloof are deliberately NOT in
+// this list — the loonkloof's stratified, headcount-weighted calculation
+// only exists as a SQL query (get_corrected_gender_pay_gap), and
+// duplicating that in JS just for this one niche interaction isn't worth
+// the two-places-to-maintain risk, so those two tiles always show the
+// whole (rail-filtered) page's figure regardless of what's highlighted.
 const kpiElements = {
     medianSalaris: document.getElementById("kpi-median-salaris"),
     benchmarkRatio: document.getElementById("kpi-benchmark-ratio"),
@@ -267,10 +396,7 @@ function formatPct(fraction) {
 
 function matchesHighlight(row, hl) {
     if (!hl) return true;
-    if (hl.dimVal !== null) {
-        const field = dimensionColumns[currentDimension];
-        if (row[field] !== hl.dimVal) return false;
-    }
+    if (hl.field !== null && row[hl.field] !== hl.value) return false;
     if (hl.colorField && row[hl.colorField] !== hl.colorVal) return false;
     return true;
 }
@@ -326,18 +452,15 @@ const baseConfig = {
 // Vega-Lite's *encoding-level* aggregation (e.g. `x: {aggregate: "sum"}`)
 // silently drops any field not part of its own groupby before the mark is
 // drawn — so an opacity `test` referencing a field the chart's own
-// encoding didn't group by (e.g. Salaris_Categorie on the chart whose own
-// color is Benchmark_Status) always sees `undefined` there, no matter
-// what the raw data actually carried. That was the second bug (salaris.html
-// — Laura: a click on Productie's "Laag" segment was highlighting all of
-// Productie in the benchmark chart, not just its "Laag" slice, and the
-// opposite direction was also wrong for Spreiding salaris). The fix: do
-// the aggregation explicitly via `transform`, with a `calculate` step
-// first that turns "does this row match the current highlight" into its
-// own boolean field, then `groupby` that field too — so a bar's color
-// band can itself split into a fully-opaque "matches" portion and a
-// dimmed "doesn't match" portion, which is also a closer match to how
-// Power BI's own cross-highlight actually renders a partial bar.
+// encoding didn't group by always sees `undefined` there, no matter what
+// the raw data actually carried. That's why the dimension-grouped charts
+// below (headcount/benchmark/new-hire) do their aggregation explicitly via
+// `transform`, with a `calculate` step first that turns "does this row
+// match the current highlight" into its own boolean field, then `groupby`
+// that field too — so a bar's color band can itself split into a fully-
+// opaque "matches" portion and a dimmed "doesn't match" portion, which is
+// also a closer match to how Power BI's own cross-highlight actually
+// renders a partial bar.
 const HIGHLIGHT_PARAM = [{ name: "hl", value: null }];
 const DIMMED_OPACITY = 0.2;
 const OPACITY_ENCODING = {
@@ -347,26 +470,40 @@ const OPACITY_ENCODING = {
 };
 const MATCH_ORDER = { field: "matches_highlight", sort: "descending" };
 
-function matchExpr(dimField) {
-    const dimClause = dimField
-        ? `(hl.dimVal == null || datum['${dimField}'] === hl.dimVal)`
-        : "true";
+// For raw per-employee rows (every real column already present on every
+// row): a highlight matches when its field/value pair matches this row's
+// own value for that same real column.
+const RAW_MATCH_EXPR =
+    "hl == null || ((hl.field == null || datum[hl.field] === hl.value) && " +
+    "(hl.colorField == null || datum[hl.colorField] === hl.colorVal))";
+
+// For a chart grouped server-side by ITS OWN currently selected dimension
+// (headcount/benchmark/new-hire): its rows only carry a generic
+// "dimension_value" alias, not the real column name, so a highlight only
+// applies to this chart's own dimVal-check when the highlight's field
+// equals this chart's own real grouping column (`ownField`) — a highlight
+// from an unrelated dimension (e.g. this chart is grouped by Functie but
+// the highlight is about Afdeling) simply doesn't dim/light anything here,
+// same as how unrelated fields don't cross-filter each other in Power BI.
+function groupedMatchExpr(ownField) {
+    const dimClause = `(hl.field == null || hl.field !== '${ownField}' || datum.dimension_value === hl.value)`;
     return `hl == null || (${dimClause} && (hl.colorField == null || datum[hl.colorField] === hl.colorVal))`;
 }
-
-// Spreiding salaris has no "dimension_value" alias (it's per-employee, not
-// grouped by the switcher's dimension) — it needs the raw field name for
-// whatever dimension is currently selected instead (e.g. "Afdeling_Naam").
-const currentDimensionField = dimensionColumns[currentDimension];
 
 wireHighlight(
     vegaEmbed("#chart-distribution", {
         $schema: "https://vega.github.io/schema/vega-lite/v6.json",
-        width: "container", height: 260,
+        width: "container", height: "container",
+        // contains:"padding" makes autosize fit the WHOLE rendered chart
+        // (axes, legend and all) to the container, not just the inner plot
+        // area — the default left legends/long axis labels free to push the
+        // total SVG wider than its own tile (the right edge of a chart
+        // falling outside the tile after a resize).
+        autosize: { type: "fit", contains: "padding" },
         data: { values: employeeRows },
         params: HIGHLIGHT_PARAM,
         transform: [
-            { calculate: matchExpr(currentDimensionField), as: "matches_highlight" }
+            { calculate: RAW_MATCH_EXPR, as: "matches_highlight" }
         ],
         mark: { type: "bar", cornerRadiusTopLeft: 3, cornerRadiusTopRight: 3, cursor: "pointer" },
         encoding: {
@@ -383,23 +520,35 @@ wireHighlight(
         },
         config: baseConfig
     }, { actions: false }),
-    // No dimensionField here on purpose: a histogram bar is an aggregate
-    // over many employees with different Afdeling_Naam/Manager_Naam/etc.
-    // values, so a click here can never set a single meaningful dimVal —
-    // only which highlight this chart's own bars should *react* to (via
-    // matchExpr(currentDimensionField) above) needs to know the current
-    // dimension's field name, not what a click here produces.
+    "chart-distribution",
+    // No `field` here on purpose: a histogram bar is an aggregate over many
+    // employees with different Afdeling_Naam/Manager_Naam/etc. values, so a
+    // click here can never set a single meaningful highlight value — only
+    // which highlights this chart's own bars should *react* to (via
+    // RAW_MATCH_EXPR above) matters, not what a click here produces.
     { colorField: "Salaris_Categorie" }
 );
 
+const headcountOwnField = dimensionColumns["{{ dim_headcount }}"];
 wireHighlight(
     vegaEmbed("#chart-headcount", {
         $schema: "https://vega.github.io/schema/vega-lite/v6.json",
+        // height stays row-count-driven (step), NOT "container": squishing
+        // every category into whatever the tile happens to be tall enough
+        // for makes an afdeling-sized list (12 rows) look fine but turns a
+        // manager-sized list (~60 rows) into overlapping, unreadable labels
+        // (the whole point of a horizontal bar chart here was to stay
+        // readable regardless of category count, not force the user to
+        // resize the tile to match whichever dimension they picked).
+        // .chart-scroll (styles.css) is what actually handles the overflow
+        // — it scrolls vertically once the real content is taller than the
+        // tile, instead of the chart being squeezed to fit.
         width: "container", height: { step: 22 },
+        autosize: { type: "fit", contains: "padding" },
         data: { values: headcountByDimensionData },
         params: HIGHLIGHT_PARAM,
         transform: [
-            { calculate: matchExpr("dimension_value"), as: "matches_highlight" },
+            { calculate: groupedMatchExpr(headcountOwnField), as: "matches_highlight" },
             {
                 aggregate: [{ op: "sum", field: "aantal", as: "total" }],
                 groupby: ["dimension_value", "Salaris_Categorie", "matches_highlight"]
@@ -420,17 +569,22 @@ wireHighlight(
         },
         config: baseConfig
     }, { actions: false }),
-    { dimensionField: "dimension_value", colorField: "Salaris_Categorie" }
+    "chart-headcount",
+    { field: headcountOwnField, colorField: "Salaris_Categorie" }
 );
 
+const benchmarkOwnField = dimensionColumns["{{ dim_benchmark }}"];
 wireHighlight(
     vegaEmbed("#chart-benchmark", {
         $schema: "https://vega.github.io/schema/vega-lite/v6.json",
+        // See chart-headcount above: row height stays fixed (step), the
+        // tile scrolls vertically instead of squeezing every category in.
         width: "container", height: { step: 22 },
+        autosize: { type: "fit", contains: "padding" },
         data: { values: benchmarkByDimensionData },
         params: HIGHLIGHT_PARAM,
         transform: [
-            { calculate: matchExpr("dimension_value"), as: "matches_highlight" },
+            { calculate: groupedMatchExpr(benchmarkOwnField), as: "matches_highlight" },
             {
                 aggregate: [{ op: "sum", field: "aantal", as: "total" }],
                 groupby: ["dimension_value", "Benchmark_Status", "matches_highlight"]
@@ -458,16 +612,147 @@ wireHighlight(
         },
         config: baseConfig
     }, { actions: false }),
-    { dimensionField: "dimension_value", colorField: "Benchmark_Status" }
+    "chart-benchmark",
+    { field: benchmarkOwnField, colorField: "Benchmark_Status" }
+);
+
+// --- Salaris versus dienstjaren: a plain scatter (one point per employee)
+// layered with a binned mean-salary line. Only the scatter layer takes
+// part in click-to-highlight (dimmed/full opacity per matches_highlight,
+// same as every other chart) — the line layer has its own `transform`
+// (bin + aggregate over ALL employees), which isn't split by
+// matches_highlight on purpose: it stays a fixed "overall average" trend
+// line regardless of what's highlighted elsewhere. Reactive only, no
+// click-to-emit: now that there's no single shared "current dimension"
+// anymore, a click on one raw employee's dot has no one obvious field to
+// broadcast (unlike headcount/benchmark/new-hire, which each know their
+// own selected dimension).
+wireHighlight(
+    vegaEmbed("#chart-tenure", {
+        $schema: "https://vega.github.io/schema/vega-lite/v6.json",
+        width: "container", height: "container",
+        autosize: { type: "fit", contains: "padding" },
+        data: { values: employeeRows },
+        params: HIGHLIGHT_PARAM,
+        transform: [
+            { calculate: RAW_MATCH_EXPR, as: "matches_highlight" }
+        ],
+        layer: [
+            {
+                mark: { type: "point", size: 20, color: "#2a3f5f" },
+                encoding: {
+                    x: { field: "Dienstjaren", type: "quantitative", title: "Dienstjaren" },
+                    y: { field: "Salaris", type: "quantitative", title: "Salaris (€)" },
+                    opacity: OPACITY_ENCODING,
+                    order: MATCH_ORDER,
+                    tooltip: [{ field: "Dienstjaren", title: "Dienstjaren" }, { field: "Salaris", title: "Salaris" }]
+                }
+            },
+            {
+                transform: [
+                    { bin: { step: 1 }, field: "Dienstjaren", as: "Dienstjaren_bin" },
+                    { aggregate: [{ op: "mean", field: "Salaris", as: "gem_salaris" }], groupby: ["Dienstjaren_bin"] }
+                ],
+                mark: { type: "line", point: true, color: "#2a78d6", strokeWidth: 2 },
+                encoding: {
+                    x: { field: "Dienstjaren_bin", type: "quantitative" },
+                    y: { field: "gem_salaris", type: "quantitative" },
+                    tooltip: [{ field: "Dienstjaren_bin", title: "Dienstjaren" }, { field: "gem_salaris", title: "Gem. salaris", format: ",.0f" }]
+                }
+            }
+        ],
+        config: baseConfig
+    }, { actions: false }),
+    "chart-tenure",
+    {}
+);
+
+// --- Compa-ratio: position within one's own salary scale (dim_salary_scale)
+// — a different question from the benchmark charts above (internal scale
+// vs. external market), so its own histogram rather than folded into
+// Spreiding salaris. Reactive-only, same reasoning as Salaris vs
+// dienstjaren above.
+wireHighlight(
+    vegaEmbed("#chart-comparatio", {
+        $schema: "https://vega.github.io/schema/vega-lite/v6.json",
+        width: "container", height: "container",
+        autosize: { type: "fit", contains: "padding" },
+        data: { values: employeeRows.filter((r) => r.Compa_Ratio_Interne_Schaal !== null) },
+        params: HIGHLIGHT_PARAM,
+        transform: [
+            { calculate: RAW_MATCH_EXPR, as: "matches_highlight" }
+        ],
+        mark: { type: "bar", cornerRadiusTopLeft: 3, cornerRadiusTopRight: 3, color: "#10bdc6" },
+        encoding: {
+            x: { bin: { step: 0.05 }, field: "Compa_Ratio_Interne_Schaal", type: "quantitative", title: "Positie in schaal", axis: { format: "%" } },
+            y: { aggregate: "count", type: "quantitative", title: "Aantal medewerkers" },
+            opacity: OPACITY_ENCODING,
+            order: MATCH_ORDER,
+            tooltip: [{ aggregate: "count", title: "Aantal" }]
+        },
+        config: baseConfig
+    }, { actions: false }),
+    "chart-comparatio",
+    {}
+);
+
+// --- Nieuwe medewerkers versus huidig salaris, per eigen dimensie-keuze:
+// average salary at hire vs. average salary now, for the currently-active
+// employees in each group. Already grouped by dimension_value server-side
+// (get_new_hire_vs_current), same shape as chart-headcount/chart-benchmark
+// — so it wires into the highlight mechanism the same way they do, both
+// emitting (click a bar here to highlight that group everywhere else) and
+// reacting (a highlight from headcount/benchmark whose field matches this
+// chart's own dimension dims this chart too).
+const newHireOwnField = dimensionColumns["{{ dim_new_hire }}"];
+wireHighlight(
+    vegaEmbed("#chart-new-hire", {
+        $schema: "https://vega.github.io/schema/vega-lite/v6.json",
+        // See chart-headcount above: row height stays fixed (step — a bit
+        // taller here, since each category is two bars: start + huidig),
+        // the tile scrolls vertically instead of squeezing every category.
+        width: "container", height: { step: 26 },
+        autosize: { type: "fit", contains: "padding" },
+        data: { values: newHireVsCurrentData },
+        params: HIGHLIGHT_PARAM,
+        transform: [
+            { calculate: groupedMatchExpr(newHireOwnField), as: "matches_highlight" },
+            { fold: ["gem_start_salaris", "gem_huidig_salaris"], as: ["Salaris_Type", "Bedrag"] }
+        ],
+        mark: { type: "bar", cursor: "pointer" },
+        encoding: {
+            y: { field: "dimension_value", type: "nominal", sort: "-x", title: null },
+            x: { field: "Bedrag", type: "quantitative", title: "Gemiddeld salaris (€)" },
+            yOffset: { field: "Salaris_Type", sort: ["gem_start_salaris", "gem_huidig_salaris"] },
+            color: {
+                field: "Salaris_Type", type: "nominal",
+                scale: { domain: ["gem_start_salaris", "gem_huidig_salaris"], range: ["#9aa0a6", "#2a78d6"] },
+                legend: {
+                    title: null,
+                    labelExpr: "datum.label == 'gem_start_salaris' ? 'Startsalaris' : 'Huidig salaris'"
+                }
+            },
+            opacity: OPACITY_ENCODING,
+            order: MATCH_ORDER,
+            tooltip: [
+                { field: "dimension_value", title: "Waarde" },
+                { field: "Salaris_Type", title: "Type" },
+                { field: "Bedrag", title: "Gem. salaris", format: ",.0f" }
+            ]
+        },
+        config: baseConfig
+    }, { actions: false }),
+    "chart-new-hire",
+    { field: newHireOwnField }
 );
 
 // --- LFL trend: Maand/Jaar granularity + a range slider, both entirely
 // client-side. Both granularities' full history are already loaded (the
 // server has no fixed lookback for this chart, unlike the rest of the
-// page — ARCHITECTURE.md, this chart isn't point-in-time), so switching
-// granularity or dragging the slider just re-slices an already-loaded
-// array and pushes it into the existing Vega view — no server round trip,
-// same reasoning as the click-to-highlight mechanism above.
+// page — this chart isn't point-in-time), so switching granularity or
+// dragging the slider just re-slices an already-loaded array and pushes
+// it into the existing Vega view — no server round trip, same reasoning
+// as the click-to-highlight mechanism above.
 let lflGranularity = "month";
 let lflView = null;
 const lflStartInput = document.getElementById("lfl-range-start");
@@ -528,7 +813,8 @@ function buildLflSpec() {
     }
     return {
         $schema: "https://vega.github.io/schema/vega-lite/v6.json",
-        width: "container", height: 260,
+        width: "container", height: "container",
+        autosize: { type: "fit", contains: "padding" },
         data: { name: "lflData", values: lflSlicedData() },
         transform: [
             { fold: ["LFL_Growth_Pct", "LFL_Growth_SameRoleContract_Pct"], as: ["Series", "Growth"] }
@@ -554,6 +840,7 @@ function buildLflSpec() {
 function renderLflChart() {
     vegaEmbed("#chart-lfl", buildLflSpec(), { actions: false }).then((result) => {
         lflView = result.view;
+        document.getElementById("chart-lfl")._vegaView = result.view;
     });
 }
 
@@ -572,5 +859,81 @@ lflStartInput.addEventListener("input", renderLflSlice);
 lflEndInput.addEventListener("input", renderLflSlice);
 resetLflRangeInputs();
 renderLflChart();
-</script>
+
+// --- "Vraag het aan de data" chat tile (ARCHITECTURE.md §8) ------------
+// One POST per question: the server runs the planner LLM call, validates
+// its output against the approved catalog, resolves it against the real
+// database via the exact same salary.py functions the rest of this page
+// uses, and returns a plain-language answer plus (for a breakdown/trend
+// measure) a ready-made Vega-Lite spec — nothing here builds a chart spec
+// itself, it only renders whatever the server already decided on.
+const chatForm = document.getElementById("chat-form");
+const chatInput = document.getElementById("chat-input");
+const chatAnswer = document.getElementById("chat-answer");
+const chatValueCard = document.getElementById("chat-value-card");
+const chatValue = document.getElementById("chat-value");
+const chatValueLabel = document.getElementById("chat-value-label");
+const chatChart = document.getElementById("chat-chart");
+
+function isFixedRowHeightSpec(spec) {
+    const height = spec.height;
+    return !!height && typeof height === "object" && "step" in height;
+}
+
+chatForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const question = chatInput.value.trim();
+    if (!question) return;
+
+    chatValueCard.style.display = "none";
+    chatAnswer.style.display = "";
+    chatAnswer.textContent = "Even denken…";
+    try {
+        const res = await fetch("/salaris/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ question }),
+        });
+        const data = await res.json();
+
+        if (data.value) {
+            // A single-figure answer (every "kpi" measure, plus a "trend"
+            // measure narrowed down to one point by a specific peildatum)
+            // — a KPI-style card reads much better here than a plain
+            // sentence buried in running text, matching the rest of the
+            // dashboard's own tiles.
+            chatValue.textContent = data.value;
+            chatValueLabel.textContent = data.value_label;
+            chatValueCard.style.display = "";
+            chatAnswer.style.display = "none";
+        } else {
+            chatAnswer.textContent = data.answer;
+        }
+
+        if (data.chart_spec) {
+            // A dynamically-added chart, unlike the ones already on the
+            // page at load time — the shared ResizeObserver in
+            // dashboard_base.html is already watching this element (it
+            // scans every .chart-canvas once, at page load), so nothing
+            // extra is needed here beyond setting the same two things
+            // every other chart on this page sets: the fixed-row-height
+            // marker and _vegaView.
+            if (isFixedRowHeightSpec(data.chart_spec)) {
+                chatChart.setAttribute("data-fixed-row-height", "");
+            } else {
+                chatChart.removeAttribute("data-fixed-row-height");
+            }
+            chatChart.style.display = "";
+            const result = await vegaEmbed("#chat-chart", data.chart_spec, { actions: false });
+            chatChart._vegaView = result.view;
+        } else {
+            chatChart.style.display = "none";
+            chatChart._vegaView = null;
+        }
+    } catch (err) {
+        chatValueCard.style.display = "none";
+        chatAnswer.style.display = "";
+        chatAnswer.textContent = "Er ging iets mis bij het ophalen van het antwoord.";
+    }
+});
 {% endblock %}

@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+{#
+  Shared shell for every drag-and-resize dashboard page (Salaris,
+  the medewerkers detail view, and any future page like Verzuim):
+  the floating navbar/footer treatment in styles.css already keys off
+  the mere presence of a `.grid-stack` element (`body:has(.grid-stack)`),
+  so any page extending this template gets that look for free, with no
+  per-page CSS to write.
+
+  A page extending this template only needs to fill in:
+  - {% block page_title %} / {% block page_actions %} (optional extra
+    buttons next to the built-in "Reset lay-out" one)
+  - {% block tiles %} — its own <div class="grid-stack-item">...</div>
+    markup (see salaris.html/salaris_medewerkers.html for the tile
+    patterns: .kpi-card, .chart-card, .filter-rail, each with a
+    <span class="tile-grip"> drag handle)
+  - {% block grid_layout_key %} — a name unique to this page, so two
+    pages' saved layouts in localStorage never collide
+  - {% block dashboard_script %} — page-specific JS (data, Vega specs,
+    a cross-chart highlight mechanism, whatever), which runs before the
+    shared grid/resize wiring below sets up
+
+  A Vega chart embedded anywhere in {% block tiles %} needs exactly two
+  things to be picked up by the shared resize handling below: the
+  container id must be given `class="chart-canvas"`, and once vegaEmbed's
+  promise resolves the page's own script must stash the view onto that
+  same element as `el._vegaView = result.view` — that's the only contract
+  between a page's own chart code and this shared template. A chart whose
+  spec uses a fixed per-row step height instead of `height: "container"`
+  (see salaris.html's chart-headcount for why) should also get
+  `data-fixed-row-height` on its container, so the observer only ever
+  pushes width into it, never height.
+#}
+
+{% block head %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/gridstack.js/13.3.0/gridstack.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gridstack.js/13.3.0/gridstack-all.min.js"></script>
+{% block dashboard_head %}{% endblock %}
+{% endblock %}
+
+{% block content %}
+<div class="page-title-row">
+    <h1 class="page-title">{% block page_title %}{% endblock %}</h1>
+    <div class="page-title-actions">
+        {% block page_actions %}{% endblock %}
+        <button type="button" class="btn btn-secondary" id="reset-layout-btn">Reset lay-out</button>
+    </div>
+</div>
+
+<div class="grid-stack">
+    {% block tiles %}{% endblock %}
+</div>
+
+<script>
+// Auto-refresh: a filter change submits the form immediately, no need to
+// click "Toepassen" first (kept as a fallback for non-JS/keyboard use).
+// Shared across every dashboard page since they all use the same
+// #filter-form id for their own filter rail.
+document.querySelectorAll('#filter-form select, #filter-form input[type="date"]').forEach((el) => {
+    el.addEventListener('change', () => el.form.submit());
+});
+
+{% block dashboard_script %}{% endblock %}
+
+// --- Drag-and-resize dashboard (gridstack.js) ---------------------------
+// Every tile is its own grid-stack-item; only the small `.tile-grip`
+// handle initiates a drag (via `handle:` below), so clicking anywhere
+// else in a tile — a KPI's own drill-through link, a chart's tooltip/
+// click-to-highlight, a filter <select> — behaves exactly as it would
+// without gridstack.
+//
+// Laura: this should remember one person's own layout, not let one demo
+// visitor's rearranging affect the next visitor — so the layout lives in
+// this browser's localStorage only, never sent to the server. The key is
+// page-specific (each child template overrides the grid_layout_key block
+// below) so the Salaris page's layout and this page's layout never
+// collide with each other.
+const LAYOUT_STORAGE_KEY = "{% block grid_layout_key %}dashboardGridLayout{% endblock %}";
+
+const grid = GridStack.init({
+    column: 12,
+    cellHeight: 56,
+    margin: 8,
+    // float:false (the default) is what makes tiles gravitate upward into
+    // empty space left behind by a move/resize elsewhere, instead of
+    // leaving a hole.
+    handle: ".tile-grip",
+    columnOpts: {
+        breakpointForWindow: true,
+        breakpoints: [
+            { w: 640, c: 1 },
+            { w: 1024, c: 6 },
+        ],
+    },
+});
+
+function saveLayout() {
+    try {
+        localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(grid.save(false)));
+    } catch (e) {
+        // Private browsing / blocked storage: layout just won't persist
+        // across reloads, nothing else on the page depends on it.
+    }
+}
+
+function loadSavedLayout() {
+    let saved = null;
+    try {
+        saved = JSON.parse(localStorage.getItem(LAYOUT_STORAGE_KEY) || "null");
+    } catch (e) {
+        saved = null;
+    }
+    if (saved && saved.length) {
+        // The second argument (default true) tells gridstack to also
+        // ADD/REMOVE widgets so the grid exactly matches `saved` — exactly
+        // wrong here: a layout saved before a new tile (like the chat
+        // tile) existed doesn't mention it, so gridstack would delete it
+        // from the page on every reload. `false` makes this only apply
+        // saved positions/sizes to tiles that still exist, and leave any
+        // tile absent from `saved` — new ones this page didn't have yet
+        // when it was saved — right where its own HTML already placed it.
+        grid.load(saved, false);
+    }
+}
+
+grid.on("change", () => saveLayout());
+
+// A ResizeObserver directly on each chart's own container, rather than
+// only reacting to gridstack's own drag/resize events: it fires whenever
+// that element's actual rendered box size changes for ANY reason — a
+// manual resize, the auto-compact reflow above pulling a chart's tile
+// into a new spot, a filter rail's fields reflowing to a different number
+// of rows, a responsive breakpoint switching the whole grid to fewer
+// columns, or the browser window itself resizing — without having to
+// enumerate every possible cause by hand.
+//
+// Plain `view.resize()` alone turned out not to be enough: it re-lays out
+// the chart using whatever width/height signal Vega already had, it
+// doesn't re-measure the container — so a chart just stayed rendered at
+// its very first size forever, no matter how many times resize() was
+// called afterwards. Explicitly feeding it this observer's own measured
+// box size (`view.width()/.height()`, both real Vega API methods that set
+// those signals directly) is what actually makes it track the container.
+//
+// This is page-agnostic on purpose: it finds every chart via the shared
+// `.chart-canvas` class rather than a hardcoded id list, and reads the
+// Vega view off the element itself (`el._vegaView`, set by the page's own
+// script — see the docstring up top) rather than a page-specific
+// registry, so a new dashboard page needs zero changes here to get
+// working resize behaviour for its own charts.
+const chartResizeObserver = new ResizeObserver((entries) => {
+    for (const entry of entries) {
+        const view = entry.target._vegaView;
+        if (!view) continue;
+        const { width, height } = entry.contentRect;
+        if (entry.target.hasAttribute("data-fixed-row-height")) {
+            // A row-count-driven chart (see the docstring up top) — only
+            // width should ever track the container; height is meant to
+            // grow with the category count and scroll inside .chart-scroll
+            // instead of being squeezed to match the tile.
+            view.width(width);
+        } else {
+            view.width(width).height(height);
+        }
+        view.runAsync();
+    }
+});
+document.querySelectorAll(".chart-canvas").forEach((el) => chartResizeObserver.observe(el));
+
+document.getElementById("reset-layout-btn").addEventListener("click", () => {
+    try {
+        localStorage.removeItem(LAYOUT_STORAGE_KEY);
+    } catch (e) {
+        // ignore
+    }
+    location.reload();
+});
+
+loadSavedLayout();
+</script>
+{% endblock %}
