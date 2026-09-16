@@ -358,8 +358,8 @@ wireHighlight(
         ],
         mark: { type: "bar", cornerRadiusTopLeft: 3, cornerRadiusTopRight: 3, cursor: "pointer" },
         encoding: {
-            x: { field: "bin_Salaris", bin: "binned", type: "quantitative", title: "Salaris (€)" },
-            x2: { field: "bin_Salaris_end" },
+            x: { field: "bin_Salaris", type: "quantitative", title: "Salaris (€)", scale: { zero: false } },
+            x2: { field: "bin_Salaris_end", type: "quantitative" },
             y: { field: "count", type: "quantitative", title: "Aantal medewerkers" },
             color: {
                 field: "Salaris_Categorie", type: "nominal", sort: CATEGORY_ORDER,
