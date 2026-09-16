@@ -349,18 +349,12 @@ wireHighlight(
         data: { values: employeeRows },
         params: HIGHLIGHT_PARAM,
         transform: [
-            { bin: { step: 5000 }, field: "Salaris", as: "bin_Salaris" },
-            { calculate: matchExpr(currentDimensionField), as: "matches_highlight" },
-            {
-                aggregate: [{ op: "count", as: "count" }],
-                groupby: ["bin_Salaris", "bin_Salaris_end", "Salaris_Categorie", "matches_highlight"]
-            }
+            { calculate: matchExpr(currentDimensionField), as: "matches_highlight" }
         ],
         mark: { type: "bar", cornerRadiusTopLeft: 3, cornerRadiusTopRight: 3, cursor: "pointer" },
         encoding: {
-            x: { field: "bin_Salaris", type: "quantitative", title: "Salaris (€)", scale: { zero: false } },
-            x2: { field: "bin_Salaris_end", type: "quantitative" },
-            y: { field: "count", type: "quantitative", title: "Aantal medewerkers" },
+            x: { bin: { step: 5000 }, field: "Salaris", type: "quantitative", title: "Salaris (€)" },
+            y: { aggregate: "count", type: "quantitative", title: "Aantal medewerkers" },
             color: {
                 field: "Salaris_Categorie", type: "nominal", sort: CATEGORY_ORDER,
                 scale: { domain: CATEGORY_ORDER, range: CATEGORY_COLORS },
@@ -368,7 +362,7 @@ wireHighlight(
             },
             opacity: OPACITY_ENCODING,
             order: MATCH_ORDER,
-            tooltip: [{ field: "Salaris_Categorie", title: "Categorie" }, { field: "count", title: "Aantal" }]
+            tooltip: [{ field: "Salaris_Categorie", title: "Categorie" }, { aggregate: "count", title: "Aantal" }]
         },
         config: baseConfig
     }, { actions: false }),
