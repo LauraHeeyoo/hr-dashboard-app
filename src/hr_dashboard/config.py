@@ -26,5 +26,14 @@ class Settings(BaseSettings):
     mssql_username: str | None = None
     mssql_pw: str | None = None
 
+    # Azure OpenAI (the chat-with-your-data tile, ARCHITECTURE.md §8). Key-
+    # based auth for local dev — same reasoning as db_auth_mode's "sql"
+    # default: Managed Identity is the production story (§10.3), deferred
+    # until this actually runs in the Container App.
+    azure_openai_api_key: str | None = None
+    azure_openai_endpoint: str | None = None
+    azure_openai_deployment: str = "gpt-5.4-mini"
+    azure_openai_api_version: str = "2025-04-01-preview"
+
 
 settings = Settings()
