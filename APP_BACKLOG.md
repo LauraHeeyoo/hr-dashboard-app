@@ -77,33 +77,29 @@ mobile/collapsible charts) work correctly but haven't had a visual pass.
 Laura: "Not too sure about how... they look, but that's purely aesthetics
 so not a big deal for now."
 
-### 5. "% medewerkers onder benchmark" KPI disagrees with the benchmark chart at the margins
+### 5. ~~"% medewerkers onder benchmark" KPI disagrees with the benchmark chart at the margins~~ (RESOLVED)
 
-Spotted by Laura: selecting "Directie" shows the KPI at 100% ("onder
-benchmark"), while "Verdeling salaris t.o.v. benchmark" shows all 4 Directie
-employees in the "Rond benchmark" bin, none in "Onder"/"Ver onder". Checked
-against both the live data and the original Power BI DAX — not a bug
-introduced during the rebuild:
+Spotted by Laura: selecting "Directie" showed the KPI at 100% ("onder
+benchmark"), while "Verdeling salaris t.o.v. benchmark" showed all 4
+Directie employees in the "Rond benchmark" bin, none in "Onder"/"Ver
+onder". Root cause: the KPI (`get_salary_kpis` in `salary.py`) computed
+`AVG(CASE WHEN Benchmark_Ratio < 1.0 THEN 1.0 ELSE 0.0 END)` — any amount
+below benchmark, no tolerance — while `Benchmark_Status` (what the chart
+bins by) uses a ±10% tolerance band around parity ("Rond benchmark" covers
+ratio 0.90–1.10, confirmed live). All 4 Directie employees sat at 90–98%:
+below 100% (so the strict KPI counted them), but inside the ±10% band (so
+the chart correctly called them "roughly at benchmark"). This matched the
+original PBIP's own DAX measure exactly, so it wasn't a rebuild bug — but
+Laura's call: "it needs to be binned. That makes more sense" — from an HR
+perspective a continuous ratio essentially never lands on exactly 100%, so
+"any amount below" was never a meaningful threshold anyway.
 
-- The KPI (`get_salary_kpis` in `salary.py`) computes
-  `AVG(CASE WHEN Benchmark_Ratio < 1.0 THEN 1.0 ELSE 0.0 END)` — literally
-  "is raw Salaris below Benchmark_Salaris at all, by any amount". This
-  matches the original model's `Percentage medewerkers onder benchmark op
-  peildatum` DAX measure exactly (`Salaris < Benchmark_Salaris`, no
-  tolerance).
-- `Benchmark_Status` (what the chart bins by) uses a ±10% tolerance band
-  around parity: "Rond benchmark" covers ratio 0.90–1.10, confirmed via a
-  live query. All 4 Directie employees sit at 90–98% — below 100% (so the
-  strict KPI counts them), but inside the ±10% band (so the chart correctly
-  calls them "roughly at benchmark").
-
-So both numbers are individually correct for what they each define — but
-they're different questions ("any amount below" vs. "outside a normal
-tolerance band") shown side by side on the same page, which reads as a
-contradiction. Options: leave both as-is (they were already two different
-measures in the original Power BI model), add a tooltip/subtitle to the KPI
-clarifying its stricter definition, or redefine the KPI to align with
-`Benchmark_Status`'s tolerance band (a deliberate departure from the
-original PBI measure — would need the same "confirmed choice + PBI-
-comparability impact" treatment `ARCHITECTURE.md` §14.2 gives the salary-
-category bucketing decision). Not yet decided.
+**Decision:** the KPI now counts "onder benchmark" as `Benchmark_Status`
+being "Onder benchmark" or "Ver onder benchmark", matching the chart
+exactly — a deliberate, confirmed departure from the original PBIP measure.
+Fixed in both `get_salary_kpis` (server-rendered baseline) and
+`salaris.html`'s client-side KPI recompute (click-to-highlight). Also
+surfaced and fixed a latent bug this exposed: the three top KPIs used
+Jinja's implicit truthiness (`{% if kpis.x %}`) instead of `is not none`,
+so a genuine `0.0` result — now common for "onder benchmark" — rendered as
+"—" instead of "0.0%".
