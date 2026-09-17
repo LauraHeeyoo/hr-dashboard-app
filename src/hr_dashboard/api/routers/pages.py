@@ -264,6 +264,7 @@ def profiel_page(
     manager: str | None = Query(default=None),
     performance: str | None = Query(default=None),
     tevredenheid: str | None = Query(default=None),
+    status: str | None = Query(default=None),
     # A plain `int | None` param here 422s on the empty string the
     # "— Kies een medewerker —" placeholder option submits (FastAPI won't
     # coerce "" to None for an int type the way it does for the str|None
@@ -281,6 +282,7 @@ def profiel_page(
         manager=_none_if_blank(manager),
         performance=_none_if_blank(performance),
         tevredenheid=_none_if_blank(tevredenheid),
+        status=_none_if_blank(status),
     )
 
     filter_options = profile.get_profile_filter_options(peildatum, filters)

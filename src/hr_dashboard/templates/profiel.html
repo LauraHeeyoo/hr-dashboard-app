@@ -74,6 +74,15 @@
                 </select>
             </div>
             <div class="filter-field">
+                <label for="status">Status</label>
+                <select id="status" name="status">
+                    <option value="">Alle</option>
+                    {% for opt in filter_options.status %}
+                    <option value="{{ opt }}" {% if filters.status == opt %}selected{% endif %}>{{ opt }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="filter-field">
                 <label for="employee_key">Medewerker ({{ narrowed_employees | length }})</label>
                 <select id="employee_key" name="employee_key">
                     <option value="">— Kies een medewerker —</option>
@@ -155,6 +164,29 @@ const peildatum = "{{ peildatum }}";
 const historyEvents = {{ history_json | safe }};
 
 if (historyEvents.length) {
+    // Salaris on the Y axis, not a flat "everything at 0" line — a plain
+    // horizontal row of dots showed WHEN something happened but nothing
+    // about what actually changed (Laura: "I don't really see the value
+    // of the type of chart we're using"). Every event already carries the
+    // salary that took effect from that date, so plotting it directly
+    // turns this into an actual salary-growth trajectory, colored by what
+    // kind of event caused each change — genuinely informative, not just
+    // decorative, and a single-event employee still shows something
+    // meaningful (their starting salary as one point) instead of a lone
+    // dot with no information in it at all.
+    //
+    // The x-axis needs an explicit tickCount/format: Vega-Lite's default
+    // temporal-axis granularity is chosen from the data's own time SPAN,
+    // and a single event (zero span) made it default all the way down to
+    // an hour-level tick ("01 AM") — a real display bug, not just a
+    // coarseness preference. `scale: {nice: "year"}` also nudges the
+    // domain to whole-year boundaries, which helps this same case further
+    // (a single point no longer sits in a domain of literally zero width).
+    const xEncoding = {
+        field: "Startdatum", type: "temporal", title: null,
+        scale: { nice: "year" },
+        axis: { format: "%Y", tickCount: { interval: "year", step: 1 }, grid: false }
+    };
     vegaEmbed("#chart-timeline", {
         $schema: "https://vega.github.io/schema/vega-lite/v6.json",
         width: "container", height: "container",
@@ -164,16 +196,17 @@ if (historyEvents.length) {
             {
                 mark: { type: "line", color: "#d8d8d8" },
                 encoding: {
-                    x: { field: "Startdatum", type: "temporal", title: null },
-                    y: { datum: 0, axis: null },
+                    x: xEncoding,
+                    y: { field: "Salaris", type: "quantitative", title: "Salaris (€)" },
                     order: { field: "Startdatum" }
                 }
             },
             {
-                mark: { type: "point", size: 160, filled: true, color: "#10bdc6" },
+                mark: { type: "point", size: 160, filled: true },
                 encoding: {
                     x: { field: "Startdatum", type: "temporal" },
-                    y: { datum: 0, axis: null },
+                    y: { field: "Salaris", type: "quantitative" },
+                    color: { field: "Gebeurtenis", type: "nominal", title: "Gebeurtenis" },
                     tooltip: [
                         { field: "Startdatum", title: "Datum", type: "temporal" },
                         { field: "Gebeurtenis", title: "Gebeurtenis" },
@@ -184,15 +217,15 @@ if (historyEvents.length) {
                 }
             },
             {
-                mark: { type: "text", dy: -18, fontSize: 10, color: "#1f2430" },
+                mark: { type: "text", dy: -14, fontSize: 10, color: "#1f2430" },
                 encoding: {
                     x: { field: "Startdatum", type: "temporal" },
-                    y: { datum: 0, axis: null },
+                    y: { field: "Salaris", type: "quantitative" },
                     text: { field: "Gebeurtenis" }
                 }
             }
         ],
-        config: { view: { stroke: null }, axis: { grid: false } }
+        config: { view: { stroke: null } }
     }, { actions: false });
 }
 

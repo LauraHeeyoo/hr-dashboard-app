@@ -56,6 +56,18 @@ TEVREDENHEID_BAND_ORDER: list[str] = ["Zeer laag", "Laag", "Neutraal", "Hoog", "
 # order isn't meaningful here (a career can revisit any of these), so no
 # canonical order constant is needed the way the two bins above need one.
 
+# "Status" isn't a plain column mcp.fn_workforce_snapshot_asof returns (it
+# has no as-of-dependent notion of "in dienst") — it's computed the same
+# way the identity card's own status label is (profiel.html: departed
+# strictly before/on the selected peildatum), via dim_employee's
+# Datum_uitdienst. Hardcoded rather than queried since there are only ever
+# exactly these two possible values.
+STATUS_OPTIONS: list[str] = ["In dienst", "Uit dienst"]
+_STATUS_CASE_EXPR = (
+    "CASE WHEN e.Datum_uitdienst IS NOT NULL AND e.Datum_uitdienst <= ? "
+    "THEN 'Uit dienst' ELSE 'In dienst' END"
+)
+
 
 @dataclass
 class ProfileFilters:
@@ -68,17 +80,23 @@ class ProfileFilters:
     manager: str | None = None
     performance: str | None = None
     tevredenheid: str | None = None
+    status: str | None = None
 
     def is_empty(self) -> bool:
         return all(getattr(self, f.name) is None for f in fields(self))
 
 
 def _snapshot_sql(select_clause: str) -> str:
+    # Joins dim_employee (aliased e) alongside the as-of function (aliased
+    # s) purely for the Status filter above — every other field this page
+    # filters by already comes straight from the function's own output.
     return (
         f"SELECT {select_clause} "
-        f"FROM mcp.fn_workforce_snapshot_asof({_ASOF_PARAM_PLACEHOLDERS}) "
-        "WHERE (? IS NULL OR Performance_Bin = ?) "
-        "AND (? IS NULL OR Tevredenheidsband_Naam = ?)"
+        f"FROM mcp.fn_workforce_snapshot_asof({_ASOF_PARAM_PLACEHOLDERS}) AS s "
+        "JOIN dbo.dim_employee AS e ON e.Employee_Key = s.Employee_Key "
+        "WHERE (? IS NULL OR s.Performance_Bin = ?) "
+        "AND (? IS NULL OR s.Tevredenheidsband_Naam = ?) "
+        f"AND (? IS NULL OR {_STATUS_CASE_EXPR} = ?)"
     )
 
 
@@ -87,6 +105,7 @@ def _snapshot_params(as_of_date: date, filters: ProfileFilters) -> tuple:
         as_of_date, filters.afdeling, filters.functie, filters.manager, None, None,
         filters.performance, filters.performance,
         filters.tevredenheid, filters.tevredenheid,
+        filters.status, as_of_date, filters.status,
     )
 
 
@@ -99,7 +118,7 @@ def get_profile_filter_options(as_of_date: date, filters: ProfileFilters) -> dic
         for field, column in FILTER_FIELD_COLUMNS.items():
             probe_filters = replace(filters, **{field: None})
             cur.execute(
-                _snapshot_sql(f"DISTINCT {column}") + f" AND {column} IS NOT NULL",
+                _snapshot_sql(f"DISTINCT s.{column}") + f" AND s.{column} IS NOT NULL",
                 _snapshot_params(as_of_date, probe_filters),
             )
             values = [r[0] for r in cur.fetchall()]
@@ -110,6 +129,7 @@ def get_profile_filter_options(as_of_date: date, filters: ProfileFilters) -> dic
             else:
                 values.sort()
             options[field] = values
+        options["status"] = STATUS_OPTIONS
         return options
 
 
@@ -119,7 +139,7 @@ def get_narrowed_employees(as_of_date: date, filters: ProfileFilters) -> list[di
     with get_connection() as conn:
         cur = conn.cursor()
         cur.execute(
-            _snapshot_sql("Employee_Key, Medewerker_Naam") + " ORDER BY Medewerker_Naam",
+            _snapshot_sql("s.Employee_Key, s.Medewerker_Naam") + " ORDER BY s.Medewerker_Naam",
             _snapshot_params(as_of_date, filters),
         )
         return rows_as_dicts(cur)
