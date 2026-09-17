@@ -256,6 +256,16 @@ body:has(.grid-stack) .app-header {
     display: flex;
     flex-wrap: wrap;
     gap: 12px;
+    /* Without this, a multi-line flex container defaults to stretching
+       its wrapped rows to fill whatever height it's currently given —
+       harmless visually here, but it makes the rail's own auto-height
+       logic (dashboard_base.html) self-referential: shrinking the tile
+       narrower always correctly needs more real height (more rows), but
+       widening it back out never shrank back down, because the existing
+       (now too-tall) box just stretched its one remaining row to keep
+       filling that same space, so scrollHeight kept reporting the old,
+       oversized height as "still needed". */
+    align-content: flex-start;
 }
 
 .filter-field {

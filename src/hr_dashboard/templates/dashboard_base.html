@@ -362,6 +362,57 @@ const chartResizeObserver = new ResizeObserver((entries) => {
 });
 document.querySelectorAll(".chart-canvas").forEach((el) => chartResizeObserver.observe(el));
 
+// A filter rail's own height auto-fits its content the same way (Laura:
+// "always full-width, on top, but its length is allowed to vary") — its
+// fields wrap into more or fewer rows purely as a function of width, so a
+// fixed gs-h is either too tall (wasted space once everything fits on one
+// row) or too short (an internal scrollbar once fields wrap further).
+// GridStack has a built-in option for exactly this (sizeToContent), but it
+// was tried first and consistently undershot this tile's real content
+// height by about one row (computed 1 grid unit when ~1.5 were actually
+// needed) — a measurement quirk that couldn't be pinned down, so this
+// hand-rolled version computes it directly instead, the same "don't trust
+// the library, compute it ourselves" approach reflowGrid above already
+// uses for the mobile column collapse.
+//
+// Measuring the RAIL's own scrollHeight (the first thing tried) doesn't
+// work either, for a subtler reason: scrollHeight only ever reveals that
+// MORE space is needed (content overflowing a too-small box) — once the
+// rail is already tall enough, it just reports its own current (possibly
+// oversized) height back, since a box with room to spare has no overflow
+// to measure and therefore no way to say "less would do". That made the
+// rail grow correctly when narrowing, but never shrink back on widening.
+// The <form> inside it, though, is a flex child on the CROSS axis only
+// (.filter-rail is a column flex container — align-items:stretch there
+// stretches width, not height), so it always sits at its own true content
+// height regardless of how tall its parent currently is. Measuring THAT
+// instead of the rail gives the real answer in both directions.
+document.querySelectorAll(".filter-rail").forEach((rail) => {
+    const tile = rail.closest(".grid-stack-item");
+    const content = rail.querySelector("form");
+    if (!tile || !content) return;
+    let lastH = null;
+    function fitHeight() {
+        const style = getComputedStyle(rail);
+        const padding = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
+        const border = parseFloat(style.borderTopWidth) + parseFloat(style.borderBottomWidth);
+        // grid.opts.margin isn't just the gap BETWEEN tiles — each tile's
+        // own content area is inset by it too (an h-unit tile's content
+        // box measures noticeably less than h * cellHeight, by roughly
+        // margin * 2, confirmed empirically against the actual rendered
+        // box here), so it has to be added back before converting a
+        // pixel height to a row count, or this undershoots by exactly
+        // that much every time.
+        const gridOverhead = grid.opts.margin * 2;
+        const neededPx = content.getBoundingClientRect().height + padding + border + gridOverhead;
+        const neededH = Math.max(1, Math.ceil(neededPx / grid.opts.cellHeight));
+        if (neededH === lastH) return;
+        lastH = neededH;
+        grid.update(tile, { h: neededH });
+    }
+    new ResizeObserver(fitHeight).observe(content);
+});
+
 document.getElementById("reset-layout-btn").addEventListener("click", () => {
     try {
         localStorage.removeItem(LAYOUT_STORAGE_KEY);
