@@ -289,8 +289,18 @@ if (historyEvents.length || scoreTrend.length) {
         width: "container",
         autosize: { type: "fit-x", contains: "padding" },
         vconcat: views,
-        spacing: 4,
-        resolve: { scale: { x: "shared" } },
+        spacing: 28,
+        // color: "independent" is the important one here, not just x —
+        // without it, the two panels' completely unrelated categorical
+        // fields (Gebeurtenis vs. Score_Type) get merged into ONE shared
+        // color scale/legend by vconcat's own default. That silently
+        // broke both panels at once: the merged domain no longer matched
+        // either field's own values, so neither panel's marks had a valid
+        // color to render with (only the axes/one merged legend title,
+        // "Gebeurtenis, Score", showed up — no visible dots/line in
+        // either panel). Same fix this needed back when it was one
+        // layered chart instead of two concatenated ones.
+        resolve: { scale: { x: "shared", color: "independent" } },
         config: { view: { stroke: null } }
     }, { actions: false }).then((result) => {
         // The one thing dashboard_base.html's shared chart-resize
