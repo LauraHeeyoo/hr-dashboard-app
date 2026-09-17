@@ -218,7 +218,7 @@ if (historyEvents.length || scoreTrend.length) {
                 },
                 {
                     data: { values: historyEvents },
-                    mark: { type: "point", size: 110, filled: true },
+                    mark: { type: "point", size: 45, filled: true },
                     encoding: {
                         x: { field: "Startdatum", type: "temporal" },
                         y: { field: "Salaris", type: "quantitative" },
@@ -264,7 +264,16 @@ if (historyEvents.length || scoreTrend.length) {
                     as: ["Score_Type", "Score_Waarde"]
                 }
             ],
-            mark: { type: "line", opacity: 0.85, interpolate: "monotone" },
+            // "basis" (a spline smoothing), not "monotone" — Laura's
+            // Paint sketch: she wants the sharp elbow at each annual
+            // review's step-change rounded into a smooth curve (like
+            // Power BI's own "smoothed line" toggle), not just a safe
+            // interpolation that avoids overshoot between points.
+            // "monotone" still bends sharply right through the actual
+            // corner; "basis" is the standard "make jaggy steps read as
+            // smooth" choice and doesn't need to pass exactly through
+            // every point to do that.
+            mark: { type: "line", opacity: 0.85, interpolate: "basis" },
             encoding: {
                 x: xEncoding("Snapshot_Date", true),
                 y: {
