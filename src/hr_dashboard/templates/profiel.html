@@ -218,7 +218,7 @@ if (historyEvents.length || scoreTrend.length) {
                 },
                 {
                     data: { values: historyEvents },
-                    mark: { type: "point", size: 160, filled: true },
+                    mark: { type: "point", size: 110, filled: true },
                     encoding: {
                         x: { field: "Startdatum", type: "temporal" },
                         y: { field: "Salaris", type: "quantitative" },
@@ -264,7 +264,7 @@ if (historyEvents.length || scoreTrend.length) {
                     as: ["Score_Type", "Score_Waarde"]
                 }
             ],
-            mark: { type: "line", point: { size: 25 }, opacity: 0.85, interpolate: "monotone" },
+            mark: { type: "line", opacity: 0.85, interpolate: "monotone" },
             encoding: {
                 x: xEncoding("Snapshot_Date", true),
                 y: {
