@@ -283,16 +283,20 @@ body:has(.grid-stack) .app-header {
 .filter-actions {
     display: flex;
     gap: 8px;
-    /* Always its own full-width row below the wrapped fields, whatever
-       column count they happened to wrap into. */
-    flex-basis: 100%;
-    margin-top: 4px;
+    /* Flows in the same wrap sequence as the fields (Laura: it was always
+       forced onto its own extra row before, even when there was plainly
+       room next to the last field) — only drops to a new line once the
+       fields themselves have already wrapped that far. align-self docks
+       it to the bottom of whichever row it lands in, level with the
+       inputs rather than the labels above them. */
+    align-self: flex-end;
 }
 
 .btn {
     display: inline-block;
     padding: 7px 14px;
     border-radius: 6px;
+    font-family: inherit;
     font-size: 0.82rem;
     font-weight: 600;
     text-decoration: none;
@@ -309,22 +313,6 @@ body:has(.grid-stack) .app-header {
 .btn-secondary {
     background: #fff;
     color: var(--text-muted);
-}
-
-/* A "quieter" action than .btn-secondary — no fill, no border, just text —
-   for something that's available but shouldn't visually compete with the
-   primary action right next to it (e.g. "Wis filters" next to "Toepassen"
-   used to; now next to the field row itself). Reduces the "same-weight
-   buttons side by side" misclick risk without needing a whole extra icon. */
-.btn-ghost {
-    background: transparent;
-    border-color: transparent;
-    color: var(--text-muted);
-    text-decoration: underline;
-}
-
-.btn-ghost:hover {
-    color: var(--text);
 }
 
 .dimension-switcher {
