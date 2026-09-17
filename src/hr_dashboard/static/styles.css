@@ -327,6 +327,7 @@ body:has(.grid-stack) .app-header {
 
 .dimension-switcher {
     margin-bottom: 14px;
+    position: relative;
 }
 
 .dimension-switcher-pills {
@@ -360,28 +361,33 @@ body:has(.grid-stack) .app-header {
     color: #fff;
 }
 
-/* The dimension-switcher's mobile stand-in for its row of pills (Laura:
-   keep the pills on a full-size screen, only switch to a dropdown once the
-   page itself is narrower than this — the pills wrap onto several rows and
-   eat a big share of a narrow tile's height, a dropdown doesn't). Both
-   markups are always in the DOM; this media query is the only thing
-   deciding which one is visible, so no JS branching is needed for the swap
-   itself. Deliberately a separate, wider threshold than the grid's own
-   640px mobile-collapse breakpoint (dashboard_base.html's
-   MOBILE_BREAKPOINT_PX) — Laura wants the dropdown swap to kick in earlier
-   (900px), well before the grid itself collapses to a single column. */
+/* The dimension-switcher's mobile stand-in for its row of pills — both
+   markups are always in the DOM, only one visible at a time. Which one is
+   a JS decision (dashboard_base.html), not a fixed pixel breakpoint: a
+   fixed width was always a rough proxy anyway, since whether the pills
+   look cramped actually depends on how many dimension options exist and
+   how long their labels are, not the viewport width alone (Laura). JS
+   counts how many rows the pills actually wrap into for THIS tile's own
+   current width and adds .force-dropdown once that exceeds 2 rows.
+   Pills stay in the DOM and laid out (not display:none) even while
+   hidden this way — position:absolute + visibility:hidden keeps them
+   invisible and non-interactive but still fully measurable, which is
+   exactly what that same JS needs to detect "this tile widened back out,
+   the pills would only need 1-2 rows now" and switch back. */
 .dimension-switcher .nav-select {
     display: none;
 }
 
-@media (max-width: 900px) {
-    .dimension-switcher-pills {
-        display: none;
-    }
+.dimension-switcher.force-dropdown .dimension-switcher-pills {
+    position: absolute;
+    left: 0;
+    right: 0;
+    visibility: hidden;
+    pointer-events: none;
+}
 
-    .dimension-switcher .nav-select {
-        display: block;
-    }
+.dimension-switcher.force-dropdown .nav-select {
+    display: block;
 }
 
 .nav-select {
@@ -644,6 +650,29 @@ body:has(.grid-stack) .app-header {
 .grid-stack-item-content.chart-card > .lfl-header,
 .grid-stack-item-content.chart-card > .lfl-range {
     flex: 0 0 auto;
+}
+
+/* The "volledig weergeven"/"inklappen" toggle a fixed-row-height chart
+   (dashboard_base.html) gets injected into its own <h2> — a plain link-
+   styled button, matching the tooltip-icon's own quiet, doesn't-compete-
+   with-the-title treatment rather than looking like a standalone action. */
+.chart-expand-toggle {
+    display: inline-block;
+    margin-left: 8px;
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--teal);
+    font-size: 0.72rem;
+    font-weight: 600;
+    font-family: inherit;
+    text-decoration: underline;
+    cursor: pointer;
+    vertical-align: middle;
+}
+
+.chart-expand-toggle:hover {
+    color: var(--navy);
 }
 
 .chart-canvas,

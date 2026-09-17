@@ -68,16 +68,40 @@ document.querySelectorAll('#filter-form select, #filter-form input[type="date"]'
     el.addEventListener('change', () => el.form.submit());
 });
 
-// A plain "go to whichever URL is selected" dropdown — the mobile-only
-// stand-in for a .dimension-switcher's row of pills (styles.css hides
-// whichever of the two isn't appropriate for the current width via a
-// media query, so this is the only JS the swap needs). Generic and shared
-// here since any future page-specific "pick one, navigate there" control
-// can reuse it by just adding this class.
+// A plain "go to whichever URL is selected" dropdown — the stand-in for a
+// .dimension-switcher's row of pills once styles.css's .force-dropdown
+// class (toggled below) hides the pills. Generic and shared here since
+// any future page-specific "pick one, navigate there" control can reuse
+// it by just adding this class.
 document.querySelectorAll("select.nav-select").forEach((el) => {
     el.addEventListener("change", () => {
         location.href = el.value;
     });
+});
+
+// Each .dimension-switcher's pills collapse into the dropdown above once
+// they'd wrap onto more than 2 rows — measured directly (how many rows
+// did the pills actually wrap into, for THIS tile's own current width),
+// not a fixed viewport-width breakpoint, since whether pills look cramped
+// really depends on how many dimension options exist and how long their
+// labels are, not the viewport alone (Laura). Every tile with its own
+// dimension-switcher is independently resizable, so this runs once per
+// switcher rather than once for the page.
+function countPillRows(pillsEl) {
+    const tops = new Set([...pillsEl.children].map((el) => Math.round(el.offsetTop)));
+    return tops.size;
+}
+
+document.querySelectorAll(".dimension-switcher").forEach((switcher) => {
+    const pills = switcher.querySelector(".dimension-switcher-pills");
+    if (!pills) return;
+    // .force-dropdown hides the pills with visibility (not display:none)
+    // specifically so they stay measurable while hidden — otherwise,
+    // once collapsed into the dropdown, there'd be no way to detect the
+    // tile widening back out enough for pills to fit again.
+    new ResizeObserver(() => {
+        switcher.classList.toggle("force-dropdown", countPillRows(pills) > 2);
+    }).observe(pills);
 });
 
 // Tooltip bubbles (".tooltip-icon" > ".tooltip-bubble", styles.css): a
@@ -411,6 +435,84 @@ document.querySelectorAll(".filter-rail").forEach((rail) => {
         grid.update(tile, { h: neededH });
     }
     new ResizeObserver(fitHeight).observe(content);
+});
+
+// A fixed-row-height chart (Aantal medewerkers, Verdeling t.o.v.
+// benchmark — anything with a data-fixed-row-height .chart-canvas) can
+// need far more height than its tile's default once a long dimension
+// (e.g. Manager, ~60 rows) is selected; .chart-scroll's own overflow
+// already handles that by scrolling internally. On mobile, though, a
+// small scrollable box is easy to miss — nothing signals there's more
+// below the fold — so these default to fully expanded there, tall enough
+// to show every row with no internal scroll. On desktop the reverse
+// problem applies (a 60-row chart at full height would dwarf the rest of
+// the page), so these default collapsed (today's normal fixed height +
+// internal scroll) there, with expanding a deliberate, occasional choice
+// instead. Either way it's just a starting point, not a persisted
+// preference — Laura: this is closer to "am I digging into this list
+// right now" than a standing preference like "Meer analyses", and unlike
+// that toggle it's already tied to whatever dimension happens to be
+// selected (itself not persisted, just a query param), so resetting on
+// every load fits.
+document.querySelectorAll(".chart-scroll > .chart-canvas[data-fixed-row-height]").forEach((canvas) => {
+    const scrollWrap = canvas.closest(".chart-scroll");
+    const content = scrollWrap.closest(".grid-stack-item-content");
+    const tile = scrollWrap.closest(".grid-stack-item");
+    const h2 = content ? content.querySelector("h2") : null;
+    if (!tile || !content || !h2) return;
+
+    const defaultH = parseInt(tile.getAttribute("gs-h"), 10);
+
+    // Temporarily let .chart-scroll size to its own natural content (it's
+    // normally flex:1 1 auto, stretched/clamped to whatever room the tile
+    // gives it) so the whole tile's true, unclipped height can be read
+    // off in one measurement — same idea as the filter rail above, just
+    // applied to a sibling instead of the tile's only real child.
+    function measureExpandedH() {
+        const prevFlex = scrollWrap.style.flex;
+        const prevOverflow = scrollWrap.style.overflowY;
+        scrollWrap.style.flex = "0 0 auto";
+        scrollWrap.style.overflowY = "visible";
+        const contentPx = content.scrollHeight;
+        scrollWrap.style.flex = prevFlex;
+        scrollWrap.style.overflowY = prevOverflow;
+
+        const style = getComputedStyle(content);
+        const border = parseFloat(style.borderTopWidth) + parseFloat(style.borderBottomWidth);
+        const gridOverhead = grid.opts.margin * 2;
+        return Math.max(1, Math.ceil((contentPx + border + gridOverhead) / grid.opts.cellHeight));
+    }
+
+    let expanded = document.querySelector(".grid-stack").getBoundingClientRect().width <= MOBILE_BREAKPOINT_PX;
+    let lastH = null;
+
+    const toggleBtn = document.createElement("button");
+    toggleBtn.type = "button";
+    toggleBtn.className = "chart-expand-toggle";
+    h2.appendChild(toggleBtn);
+
+    function applyState() {
+        toggleBtn.textContent = expanded ? "Inklappen" : "Volledig weergeven";
+        const targetH = expanded ? measureExpandedH() : defaultH;
+        if (targetH === lastH) return;
+        lastH = targetH;
+        grid.update(tile, { h: targetH });
+    }
+
+    toggleBtn.addEventListener("click", () => {
+        expanded = !expanded;
+        lastH = null; // force-apply even if this happens to match the last height
+        applyState();
+    });
+
+    // Re-fits an already-expanded chart if its own rendered size changes
+    // (e.g. the tile is dragged narrower, changing how many rows a
+    // fixed-row-height spec needs) — a no-op while collapsed.
+    new ResizeObserver(() => {
+        if (expanded) applyState();
+    }).observe(canvas);
+
+    applyState();
 });
 
 document.getElementById("reset-layout-btn").addEventListener("click", () => {
