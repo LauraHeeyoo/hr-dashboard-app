@@ -154,7 +154,15 @@
     </div>
 </div>
 
-<div class="grid-stack-item" gs-id="profile-timeline" gs-x="0" gs-y="14" gs-w="12" gs-h="10" gs-min-w="4">
+<div class="grid-stack-item" gs-id="profile-peers" gs-x="0" gs-y="14" gs-w="12" gs-h="5" gs-min-w="6">
+    <div class="grid-stack-item-content chart-card">
+        <span class="tile-grip"></span>
+        <h2>Vergelijking met peers ({{ snapshot.Afdeling_Naam }})</h2>
+        <div id="peer-comparison-grid" class="profile-peer-grid"></div>
+    </div>
+</div>
+
+<div class="grid-stack-item" gs-id="profile-timeline" gs-x="0" gs-y="19" gs-w="12" gs-h="10" gs-min-w="4">
     <div class="grid-stack-item-content chart-card">
         <span class="tile-grip"></span>
         <h2>Loopbaan</h2>
@@ -183,6 +191,85 @@ const employeeKey = {{ employee_key }};
 const peildatum = "{{ peildatum }}";
 const historyEvents = {{ history_json | safe }};
 const scoreTrend = {{ score_trend_json | safe }};
+const peerComparison = {{ peer_comparison_json | safe }};
+
+// "Vergelijking met peers": one small, independent chart per metric
+// rather than one combined multi-metric chart — Salaris (€), the three
+// 0-10ish scores, and Verzuim (days) are wildly different scales, and
+// cramming them into one chart with shared/resolved scales is exactly
+// the kind of cross-view scale-sharing bug this page has already hit
+// twice while building "Loopbaan" (a merged color scale, then a
+// mismatched field name) — five trivial, fully independent single-view
+// specs sidestep that whole class of bug entirely.
+// d3-format (what Vega-Lite's `format` actually uses) has no plain
+// "stick a literal € in front" syntax the way this first read — "€,.0f"
+// just isn't a valid spec, not a styling choice — so the currency symbol
+// lives in the label instead, and the axis/tooltip format stays a plain
+// number.
+const PEER_METRICS = [
+    { key: "Salaris", label: "Salaris (€)", format: ",.0f" },
+    { key: "Prestatie_Score", label: "Performance", format: ".1f" },
+    { key: "Tevredenheid_Score", label: "Tevredenheid", format: ".1f" },
+    { key: "Betrokkenheid_Score", label: "Betrokkenheid", format: ".1f" },
+    { key: "Verzuim_Werkdagen", label: "Verzuim (dagen)", format: ".1f" }
+];
+
+if (peerComparison && peerComparison.peer_count > 0) {
+    const grid = document.getElementById("peer-comparison-grid");
+    PEER_METRICS.forEach(({ key, label, format }) => {
+        const pair = peerComparison[key];
+        if (!pair || pair.employee === null || pair.employee === undefined
+            || pair.peer === null || pair.peer === undefined) {
+            return;
+        }
+        const item = document.createElement("div");
+        item.className = "profile-peer-item";
+        const title = document.createElement("div");
+        title.className = "profile-peer-item-title";
+        title.textContent = label;
+        const canvas = document.createElement("div");
+        canvas.id = `peer-chart-${key}`;
+        canvas.className = "chart-canvas";
+        canvas.setAttribute("data-fixed-row-height", "");
+        item.appendChild(title);
+        item.appendChild(canvas);
+        grid.appendChild(item);
+
+        vegaEmbed(`#${canvas.id}`, {
+            $schema: "https://vega.github.io/schema/vega-lite/v6.json",
+            width: "container", height: 70,
+            autosize: { type: "fit-x", contains: "padding" },
+            data: {
+                values: [
+                    { Wie: "Deze medewerker", Waarde: pair.employee },
+                    { Wie: "Afdeling", Waarde: pair.peer }
+                ]
+            },
+            mark: "bar",
+            encoding: {
+                y: {
+                    field: "Wie", type: "nominal", title: null,
+                    sort: ["Deze medewerker", "Afdeling"], axis: { labelLimit: 90 }
+                },
+                x: { field: "Waarde", type: "quantitative", title: null, axis: { format } },
+                color: {
+                    field: "Wie", type: "nominal", legend: null,
+                    scale: { domain: ["Deze medewerker", "Afdeling"], range: ["#10bdc6", "#c9c9c9"] }
+                },
+                tooltip: [
+                    { field: "Wie", title: "Wie" },
+                    { field: "Waarde", title: "Waarde", format }
+                ]
+            },
+            config: { view: { stroke: null } }
+        }, { actions: false }).then((result) => {
+            canvas._vegaView = result.view;
+        });
+    });
+} else {
+    document.getElementById("peer-comparison-grid").innerHTML =
+        '<p class="profile-empty-state">Geen collega’s in deze afdeling om mee te vergelijken.</p>';
+}
 
 if (historyEvents.length || scoreTrend.length) {
     // Two STACKED charts sharing only the time axis, not one chart with

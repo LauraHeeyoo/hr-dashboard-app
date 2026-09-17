@@ -296,6 +296,7 @@ def profiel_page(
     history: list[dict] = []
     score_trend: list[dict] = []
     signals: list[str] = []
+    peer_averages: dict | None = None
     if employee_key_int is not None:
         snapshot = profile.get_employee_snapshot(employee_key_int, peildatum)
         if snapshot is not None:
@@ -303,6 +304,30 @@ def profiel_page(
             history = profile.get_employee_history(employee_key_int)
             score_trend = profile.get_employee_score_trend(employee_key_int)
             signals = profile.get_employee_signals(snapshot, score_trend)
+            peer_averages = profile.get_peer_group_averages(
+                employee_key_int, snapshot["Afdeling_Naam"], peildatum
+            )
+
+    # One compact structure for the "Vergelijking met peers" mini-charts —
+    # built here (not in profile.py) since it's just pairing up two
+    # already-fetched results, not a new query. The employee's own side
+    # uses the LATEST score_trend row for the four score-trend fields
+    # (matching what get_employee_signals compares against too), and the
+    # snapshot directly for Salaris.
+    peer_comparison = None
+    if snapshot is not None and peer_averages is not None:
+        latest_scores = score_trend[-1] if score_trend else {}
+        peer_comparison = {
+            field: {"employee": employee_value, "peer": peer_averages.get(field)}
+            for field, employee_value in (
+                ("Salaris", snapshot.get("Salaris")),
+                ("Prestatie_Score", latest_scores.get("Prestatie_Score")),
+                ("Tevredenheid_Score", latest_scores.get("Tevredenheid_Score")),
+                ("Betrokkenheid_Score", latest_scores.get("Betrokkenheid_Score")),
+                ("Verzuim_Werkdagen", latest_scores.get("Verzuim_Werkdagen")),
+            )
+        }
+        peer_comparison["peer_count"] = peer_averages.get("Peer_Count") or 0
 
     clear_filters_params = {}
     if as_of:
@@ -323,6 +348,7 @@ def profiel_page(
             "history_json": json.dumps(history, default=_json_default),
             "score_trend_json": json.dumps(score_trend, default=_json_default),
             "signals": signals,
+            "peer_comparison_json": json.dumps(peer_comparison, default=_json_default),
             "clear_filters_url": "/profiel?" + "&".join(
                 f"{k}={v}" for k, v in clear_filters_params.items()
             ),

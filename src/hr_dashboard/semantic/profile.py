@@ -251,7 +251,10 @@ def get_employee_score_trend(employee_key: int) -> list[dict]:
         # doubles Prestatie_Score as a stand-in. REVERT this loop (just
         # return `rows` directly) once the generator itself produces an
         # already-unified scale — leaving this in afterwards would double
-        # an already-correct value.
+        # an already-correct value. get_peer_group_averages below has the
+        # exact same doubling, for the exact same reason — revert both
+        # together, or the peer comparison bars go wrong instead of just
+        # the trend chart's own scale.
         for row in rows:
             if row["Prestatie_Score"] is not None:
                 row["Prestatie_Score"] = row["Prestatie_Score"] * 2
@@ -332,3 +335,60 @@ def get_employee_signals(snapshot: dict, score_trend: list[dict]) -> list[str]:
                 )
 
     return signals
+
+
+def get_peer_group_averages(employee_key: int, afdeling: str, as_of_date: date) -> dict:
+    """Department-peer averages for the "Vergelijking met peers" tile —
+    Salaris, Prestatie_Score, Tevredenheid_Score, Betrokkenheid_Score and
+    Verzuim_Werkdagen, averaged across every OTHER employee in the same
+    department, as of the same peildatum (Laura's proposal: "vs. their
+    own department... is a fairer comparison than one company-wide
+    blend").
+
+    A direct fact_workforce_snapshot query rather than
+    mcp.fn_workforce_snapshot_asof — that function doesn't return
+    Tevredenheid_Score/Betrokkenheid_Score/Verzuim_Werkdagen at all (only
+    their derived bands/status), so this repeats just its "latest
+    snapshot <= peildatum, per employee" join, not the whole function.
+
+    Salaris is explicitly cast to DECIMAL before AVG() — SQL Server's
+    AVG() of a plain INT column does integer division (truncates instead
+    of averaging), which would silently give a wrong, rounded-down figure
+    here."""
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT
+                AVG(CAST(s.Salaris AS DECIMAL(18, 4))) AS Salaris,
+                AVG(s.Prestatie_Score) AS Prestatie_Score,
+                AVG(s.Tevredenheid_Score) AS Tevredenheid_Score,
+                AVG(s.Betrokkenheid_Score) AS Betrokkenheid_Score,
+                AVG(s.Verzuim_Werkdagen) AS Verzuim_Werkdagen,
+                COUNT(*) AS Peer_Count
+            FROM dbo.fact_workforce_snapshot AS s
+            INNER JOIN (
+                SELECT Employee_Key, MAX(Snapshot_Date) AS Snapshot_Date
+                FROM dbo.fact_workforce_snapshot
+                WHERE Snapshot_Date <= ?
+                GROUP BY Employee_Key
+            ) AS latest
+                ON latest.Employee_Key = s.Employee_Key
+               AND latest.Snapshot_Date = s.Snapshot_Date
+            JOIN dbo.dim_department AS d ON d.Department_Key = s.Department_Key
+            WHERE d.Afdeling_Naam = ?
+              AND s.Employee_Key != ?
+            """,
+            (as_of_date, afdeling, employee_key),
+        )
+        row = cur.fetchone()
+        columns = [c[0] for c in cur.description]
+        result = dict(zip(columns, row))
+        # Same TEMPORARY doubling as get_employee_score_trend's own
+        # Prestatie_Score, and for the same reason — comparing this
+        # employee's (already doubled) score against a peer average that
+        # wasn't would make the comparison meaningless, not just
+        # inconsistent styling. Revert together with that other one.
+        if result["Prestatie_Score"] is not None:
+            result["Prestatie_Score"] = result["Prestatie_Score"] * 2
+        return result

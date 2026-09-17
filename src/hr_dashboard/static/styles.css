@@ -964,6 +964,28 @@ body:has(.grid-stack) .app-header {
     margin-bottom: 4px;
 }
 
+.profile-peer-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-top: 10px;
+}
+
+.profile-peer-item {
+    flex: 1 1 160px;
+    min-width: 160px;
+}
+
+.profile-peer-item-title {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+}
+
+.profile-peer-item .chart-canvas {
+    height: 70px;
+}
+
 .app-footer {
     display: flex;
     justify-content: space-between;
