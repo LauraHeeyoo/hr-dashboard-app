@@ -279,7 +279,8 @@ const dimensionColumns = {{ dimension_columns_json | safe }};
 // chart, and recomputes the KPI tiles for just the highlighted subset —
 // nothing disappears and no server round trip happens.
 //
-// The highlight signal is {field, value, colorField, colorVal} | null:
+// The highlight signal is
+// {field, value, colorField, colorVal, rangeField, rangeMin, rangeMax} | null:
 // `field` is always a REAL employee-row column name (e.g. "Afdeling_Naam"),
 // never a chart-specific alias — this used to be resolved through one
 // shared "current dimension" global, but now that "Aantal medewerkers",
@@ -293,7 +294,13 @@ const dimensionColumns = {{ dimension_columns_json | safe }};
 // needed. A raw per-employee chart (Spreiding salaris, Salaris versus
 // dienstjaren, compa-ratio) already carries every real column on every
 // row, so this check works regardless of which of the three switchers
-// produced the highlight.
+// produced the highlight. `field` can also be "Employee_Key" (Salaris
+// versus dienstjaren emits this — one dot already IS one specific
+// employee, no aggregation to fall back to) — the three dimension-grouped
+// charts correctly ignore it, since Employee_Key never equals any of
+// their own grouping columns. `rangeField`/rangeMin/rangeMax (compa-ratio)
+// is the same idea as colorField but for a bar that represents a BAND of
+// a continuous value instead of one discrete category.
 //
 // This whole mechanism (and _vegaView, read by dashboard_base.html's
 // shared resize observer) is specific to this page — a page with just one
@@ -306,7 +313,8 @@ function sameHighlight(a, b) {
     if (a === b) return true;
     if (!a || !b) return false;
     return a.field === b.field && a.value === b.value
-        && a.colorField === b.colorField && a.colorVal === b.colorVal;
+        && a.colorField === b.colorField && a.colorVal === b.colorVal
+        && a.rangeField === b.rangeField && a.rangeMin === b.rangeMin && a.rangeMax === b.rangeMax;
 }
 
 function setHighlight(next) {
@@ -319,11 +327,27 @@ function setHighlight(next) {
 }
 
 // `field`, when given, is the real column name THIS chart's click should
-// emit (e.g. "Afdeling_Naam") — only the three dimension-grouped charts
-// pass it, reading the value from their row's generic "dimension_value"
-// alias. `colorField` is a real column name to read a color-based value
-// from directly (e.g. "Salaris_Categorie").
-function wireHighlight(viewPromise, elementId, { field, colorField } = {}) {
+// emit (e.g. "Afdeling_Naam") — the three dimension-grouped charts read
+// its value from their row's generic "dimension_value" alias; a raw
+// per-employee chart (Salaris versus dienstjaren, clicking one specific
+// person via "Employee_Key") has no such alias, so this falls back to
+// reading `field` directly off the clicked datum instead. `colorField` is
+// a real column name to read a color-based value from directly (e.g.
+// "Salaris_Categorie"). `rangeField` is for a binned numeric field
+// (compa-ratio): Vega-Lite's own bin transform already attaches the
+// clicked bin's own lower/upper edge to the datum (as
+// `bin_..._<rangeField>` / `..._end`) — this just reads those back off
+// instead of a single exact value, so "highlight everyone in this range"
+// works the same way "highlight everyone in this category" already did.
+function findBinRange(datum, rangeField) {
+    const endKey = Object.keys(datum).find((k) => k.startsWith("bin_") && k.endsWith(rangeField + "_end"));
+    if (!endKey) return null;
+    const startKey = endKey.slice(0, -4); // strip "_end"
+    if (datum[startKey] === undefined || datum[endKey] === undefined) return null;
+    return { start: datum[startKey], end: datum[endKey] };
+}
+
+function wireHighlight(viewPromise, elementId, { field, colorField, rangeField } = {}) {
     viewPromise.then((result) => {
         highlightViews.push(result.view);
         document.getElementById(elementId)._vegaView = result.view;
@@ -332,14 +356,29 @@ function wireHighlight(viewPromise, elementId, { field, colorField } = {}) {
                 setHighlight(null);
                 return;
             }
-            const next = { field: null, value: null, colorField: null, colorVal: null };
-            if (field && item.datum.dimension_value !== undefined) {
-                next.field = field;
-                next.value = item.datum.dimension_value;
+            const next = {
+                field: null, value: null,
+                colorField: null, colorVal: null,
+                rangeField: null, rangeMin: null, rangeMax: null,
+            };
+            if (field) {
+                const val = item.datum.dimension_value !== undefined ? item.datum.dimension_value : item.datum[field];
+                if (val !== undefined) {
+                    next.field = field;
+                    next.value = val;
+                }
             }
             if (colorField && item.datum[colorField] !== undefined) {
                 next.colorField = colorField;
                 next.colorVal = item.datum[colorField];
+            }
+            if (rangeField) {
+                const range = findBinRange(item.datum, rangeField);
+                if (range) {
+                    next.rangeField = rangeField;
+                    next.rangeMin = range.start;
+                    next.rangeMax = range.end;
+                }
             }
             setHighlight(next);
         });
@@ -388,6 +427,7 @@ function matchesHighlight(row, hl) {
     if (!hl) return true;
     if (hl.field !== null && row[hl.field] !== hl.value) return false;
     if (hl.colorField && row[hl.colorField] !== hl.colorVal) return false;
+    if (hl.rangeField && !(row[hl.rangeField] >= hl.rangeMin && row[hl.rangeField] < hl.rangeMax)) return false;
     return true;
 }
 
@@ -585,9 +625,15 @@ function rankExpr(field, order) {
 // For raw per-employee rows (every real column already present on every
 // row): a highlight matches when its field/value pair matches this row's
 // own value for that same real column.
+// Every raw per-employee row carries every real column, including
+// Compa_Ratio_Interne_Schaal (null for anyone without a scale — null
+// never satisfies a >= / < range check either, so they correctly never
+// match a compa-ratio range highlight), so no "field missing" guard is
+// needed here the way groupedMatchExpr below needs one.
 const RAW_MATCH_EXPR =
     "hl == null || ((hl.field == null || datum[hl.field] === hl.value) && " +
-    "(hl.colorField == null || datum[hl.colorField] === hl.colorVal))";
+    "(hl.colorField == null || datum[hl.colorField] === hl.colorVal) && " +
+    "(hl.rangeField == null || (datum[hl.rangeField] >= hl.rangeMin && datum[hl.rangeField] < hl.rangeMax)))";
 
 // For a chart grouped server-side by ITS OWN currently selected dimension
 // (headcount/benchmark/new-hire): its rows only carry a generic
@@ -597,9 +643,27 @@ const RAW_MATCH_EXPR =
 // from an unrelated dimension (e.g. this chart is grouped by Functie but
 // the highlight is about Afdeling) simply doesn't dim/light anything here,
 // same as how unrelated fields don't cross-filter each other in Power BI.
+//
+// The colorField/rangeField clauses need an extra !isValid(...) guard
+// that RAW_MATCH_EXPR doesn't: a grouped chart's rows don't necessarily
+// carry every color/range field every OTHER chart might highlight by
+// (e.g. Startsalaris versus huidig salaris has neither Salaris_Categorie
+// nor Benchmark_Status at all) — without the guard, `datum[hl.colorField]`
+// on a row that doesn't have that key at all is undefined, which never
+// equals a real colorVal, so EVERY row would silently fail to match and
+// the whole chart would dim, even though the highlight has nothing to do
+// with this chart. isValid(...) tells "field absent" (this doesn't apply
+// to me, stay visible) apart from "field present but a different value"
+// (this genuinely doesn't match, dim it) — the same "unrelated dimension
+// doesn't touch this chart" courtesy dimClause already gives `field`,
+// extended to colorField/rangeField too (Laura: Startsalaris versus
+// huidig salaris was going fully dim on any unrelated category click).
 function groupedMatchExpr(ownField) {
     const dimClause = `(hl.field == null || hl.field !== '${ownField}' || datum.dimension_value === hl.value)`;
-    return `hl == null || (${dimClause} && (hl.colorField == null || datum[hl.colorField] === hl.colorVal))`;
+    const colorClause = "(hl.colorField == null || !isValid(datum[hl.colorField]) || datum[hl.colorField] === hl.colorVal)";
+    const rangeClause = "(hl.rangeField == null || !isValid(datum[hl.rangeField]) || " +
+        "(datum[hl.rangeField] >= hl.rangeMin && datum[hl.rangeField] < hl.rangeMax))";
+    return `hl == null || (${dimClause} && ${colorClause} && ${rangeClause})`;
 }
 
 wireHighlight(
@@ -750,11 +814,18 @@ wireHighlight(
 // same as every other chart) — the line layer has its own `transform`
 // (bin + aggregate over ALL employees), which isn't split by
 // matches_highlight on purpose: it stays a fixed "overall average" trend
-// line regardless of what's highlighted elsewhere. Reactive only, no
-// click-to-emit: now that there's no single shared "current dimension"
-// anymore, a click on one raw employee's dot has no one obvious field to
-// broadcast (unlike headcount/benchmark/new-hire, which each know their
-// own selected dimension).
+// line regardless of what's highlighted elsewhere.
+//
+// Does emit on click, via Employee_Key — unlike headcount/benchmark/new-
+// hire (which each broadcast their own currently-selected DIMENSION,
+// shared by many employees), one dot here already IS one specific,
+// unambiguous employee, so there's no aggregation to fall back to; it's
+// just a more precise version of the exact same mechanism (Laura: "you
+// actually select a single employee, right? So why can we not see that
+// employee... highlighted"). Every other per-employee chart (Spreiding
+// salaris, the compa-ratio histogram, this one) picks that single row out
+// correctly; the three dimension-grouped charts correctly stay untouched,
+// since Employee_Key never equals any of their own grouping columns.
 wireHighlight(
     vegaEmbed("#chart-tenure", {
         $schema: "https://vega.github.io/schema/vega-lite/v6.json",
@@ -767,13 +838,17 @@ wireHighlight(
         ],
         layer: [
             {
-                mark: { type: "point", size: 20, color: "#2a3f5f" }, // navy — see the trend line below
+                mark: { type: "point", size: 20, color: "#2a3f5f", cursor: "pointer" }, // navy — see the trend line below
                 encoding: {
                     x: { field: "Dienstjaren", type: "quantitative", title: "Dienstjaren" },
                     y: { field: "Salaris", type: "quantitative", title: "Salaris (€)" },
                     opacity: OPACITY_ENCODING,
                     order: MATCH_ORDER,
-                    tooltip: [{ field: "Dienstjaren", title: "Dienstjaren" }, { field: "Salaris", title: "Salaris" }]
+                    tooltip: [
+                        { field: "Medewerker_Naam", title: "Medewerker" },
+                        { field: "Dienstjaren", title: "Dienstjaren" },
+                        { field: "Salaris", title: "Salaris" }
+                    ]
                 }
             },
             {
@@ -798,14 +873,24 @@ wireHighlight(
         config: baseConfig
     }, { actions: false }),
     "chart-tenure",
-    {}
+    { field: "Employee_Key" }
 );
 
 // --- Compa-ratio: position within one's own salary scale (dim_salary_scale)
 // — a different question from the benchmark charts above (internal scale
 // vs. external market), so its own histogram rather than folded into
-// Spreiding salaris. Reactive-only, same reasoning as Salaris vs
-// dienstjaren above.
+// Spreiding salaris.
+//
+// Does emit on click, via rangeField — a bar here is a BAND of compa-ratio
+// values (however many employees fall in it), not one specific employee
+// the way a "Salaris versus dienstjaren" dot is, so there's no single
+// value to broadcast the way Employee_Key works there. What it broadcasts
+// instead is the clicked bin's own lower/upper edge (Vega-Lite's bin
+// transform already computes and attaches these to every binned datum),
+// letting every other per-employee chart highlight "everyone whose
+// compa-ratio falls in this exact range" — the same underlying idea as
+// every other click-to-highlight here, just a range match instead of an
+// exact-value one.
 wireHighlight(
     vegaEmbed("#chart-comparatio", {
         $schema: "https://vega.github.io/schema/vega-lite/v6.json",
@@ -816,7 +901,7 @@ wireHighlight(
         transform: [
             { calculate: RAW_MATCH_EXPR, as: "matches_highlight" }
         ],
-        mark: { type: "bar", cornerRadiusTopLeft: 3, cornerRadiusTopRight: 3, color: "#10bdc6" },
+        mark: { type: "bar", cornerRadiusTopLeft: 3, cornerRadiusTopRight: 3, color: "#10bdc6", cursor: "pointer" },
         encoding: {
             x: { bin: { step: 0.05 }, field: "Compa_Ratio_Interne_Schaal", type: "quantitative", title: "Positie in schaal", axis: { format: "%" } },
             y: { aggregate: "count", type: "quantitative", title: "Aantal medewerkers" },
@@ -827,7 +912,7 @@ wireHighlight(
         config: baseConfig
     }, { actions: false }),
     "chart-comparatio",
-    {}
+    { rangeField: "Compa_Ratio_Interne_Schaal" }
 );
 
 // --- Nieuwe medewerkers versus huidig salaris, per eigen dimensie-keuze:
