@@ -19,6 +19,12 @@
             <span class="nav-tab disabled" title="Nog niet gebouwd">Verzuim</span>
             <span class="nav-tab disabled" title="Nog niet gebouwd">Incidenten</span>
         </nav>
+        <div class="nav-menu">
+            <button type="button" class="nav-menu-btn" id="nav-menu-btn" aria-label="Navigatie" aria-haspopup="true" aria-expanded="false">
+                <span class="nav-menu-icon" aria-hidden="true">&#9776;</span> Navigatie
+            </button>
+            <div class="nav-menu-panel" id="nav-menu-panel"></div>
+        </div>
         <div class="app-info">
             <button type="button" class="app-info-btn" id="app-info-btn" aria-label="Over dit dashboard" aria-expanded="false">i</button>
             <div class="app-info-popover" id="app-info-popover" role="dialog">
@@ -50,6 +56,71 @@
                 btn.setAttribute("aria-expanded", "false");
             }
         });
+    })();
+
+    // Collapses the full tab row into a "Navigatie" dropdown once it no
+    // longer fits its own width — driven by actually measuring overflow
+    // (scrollWidth vs. clientWidth) rather than a fixed pixel breakpoint,
+    // since the right cutoff shifts as pages get added/renamed and would
+    // otherwise need to be re-guessed by hand every time (Laura wanted
+    // this instead of the nav's previous horizontal-scroll fallback,
+    // which is hard to discover and fiddly to use for primary
+    // navigation). The SAME .app-nav element (with its real tabs) is
+    // reparented between its normal header position and the dropdown
+    // panel — not duplicated — so there is only ever one copy of the tab
+    // list to keep in sync.
+    (function () {
+        const header = document.querySelector(".app-header");
+        const nav = document.querySelector(".app-nav");
+        const navMenu = document.querySelector(".nav-menu");
+        const menuBtn = document.getElementById("nav-menu-btn");
+        const menuPanel = document.getElementById("nav-menu-panel");
+
+        function isCollapsed() {
+            return nav.parentElement === menuPanel;
+        }
+
+        function closeMenu() {
+            menuPanel.classList.remove("open");
+            menuBtn.setAttribute("aria-expanded", "false");
+        }
+
+        function collapseNav() {
+            if (!isCollapsed()) menuPanel.appendChild(nav);
+            menuBtn.style.display = "inline-flex";
+        }
+
+        function expandNav() {
+            if (isCollapsed()) header.insertBefore(nav, navMenu);
+            menuBtn.style.display = "none";
+            closeMenu();
+        }
+
+        function updateLayout() {
+            // Always measure from the expanded state — scrollWidth on an
+            // already-collapsed (emptied) nav would just read as "fits".
+            expandNav();
+            const overflowing = nav.scrollWidth > nav.clientWidth + 1;
+            if (overflowing) collapseNav();
+        }
+
+        menuBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const open = menuPanel.classList.toggle("open");
+            menuBtn.setAttribute("aria-expanded", String(open));
+        });
+        document.addEventListener("click", (e) => {
+            if (isCollapsed() && !menuPanel.contains(e.target) && e.target !== menuBtn) {
+                closeMenu();
+            }
+        });
+
+        let resizeTimer;
+        window.addEventListener("resize", () => {
+            clearTimeout(resizeTimer);
+            resizeTimer = setTimeout(updateLayout, 150);
+        });
+        updateLayout();
     })();
     </script>
 </body>
