@@ -214,3 +214,28 @@ def get_employee_history(employee_key: int) -> list[dict]:
             (employee_key,),
         )
         return rows_as_dicts(cur)
+
+
+def get_employee_score_trend(employee_key: int) -> list[dict]:
+    """Performance/tevredenheid/betrokkenheid over time — periodic
+    fact_workforce_snapshot data (roughly monthly), a different grain from
+    get_employee_history's fact_employment career events. "Loopbaan" layers
+    this on a second Y-axis alongside the (sparser) salary/event points,
+    sharing only the time axis, not the row grain. Laura: Prestatie_Score
+    is currently ~0-5 while Tevredenheid_Score/Betrokkenheid_Score are
+    ~0-10 (confirmed live), and she's updating the data generator to put
+    all three on the same 0-10 scale — nothing here assumes that's already
+    done (no hardcoded scale/domain), so the chart will pick up the
+    unified scale automatically once that lands, no code change needed."""
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT Snapshot_Date, Prestatie_Score, Tevredenheid_Score, Betrokkenheid_Score
+            FROM dbo.fact_workforce_snapshot
+            WHERE Employee_Key = ?
+            ORDER BY Snapshot_Date
+            """,
+            (employee_key,),
+        )
+        return rows_as_dicts(cur)

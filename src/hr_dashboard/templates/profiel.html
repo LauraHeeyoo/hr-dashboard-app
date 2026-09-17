@@ -162,8 +162,9 @@
 const employeeKey = {{ employee_key }};
 const peildatum = "{{ peildatum }}";
 const historyEvents = {{ history_json | safe }};
+const scoreTrend = {{ score_trend_json | safe }};
 
-if (historyEvents.length) {
+if (historyEvents.length || scoreTrend.length) {
     // Salaris on the Y axis, not a flat "everything at 0" line — a plain
     // horizontal row of dots showed WHEN something happened but nothing
     // about what actually changed (Laura: "I don't really see the value
@@ -187,44 +188,107 @@ if (historyEvents.length) {
         scale: { nice: "year" },
         axis: { format: "%Y", tickCount: { interval: "year", step: 1 }, grid: false }
     };
+    // `resolve: {scale: {y: "independent"}}` below applies to whatever's
+    // directly inside the top-level `layer` array — so the 3 salary
+    // sub-layers (line/points/text) are nested into ONE group here, to
+    // keep sharing a single merged axis the way they did before the score
+    // layer was added. Without this nesting, "independent" would apply to
+    // ALL of them individually instead of just the two axis GROUPS
+    // (salary vs. score), drawing 3 duplicate "Salaris" axes.
+    const layers = [];
+    if (historyEvents.length) {
+        layers.push({
+            layer: [
+                {
+                    data: { values: historyEvents },
+                    mark: { type: "line", color: "#d8d8d8" },
+                    encoding: {
+                        x: xEncoding,
+                        y: { field: "Salaris", type: "quantitative", title: "Salaris (€)" },
+                        order: { field: "Startdatum" }
+                    }
+                },
+                {
+                    data: { values: historyEvents },
+                    mark: { type: "point", size: 160, filled: true },
+                    encoding: {
+                        x: { field: "Startdatum", type: "temporal" },
+                        y: { field: "Salaris", type: "quantitative" },
+                        color: { field: "Gebeurtenis", type: "nominal", title: "Gebeurtenis" },
+                        tooltip: [
+                            { field: "Startdatum", title: "Datum", type: "temporal" },
+                            { field: "Gebeurtenis", title: "Gebeurtenis" },
+                            { field: "Functie_Naam", title: "Functie" },
+                            { field: "Salaris", title: "Salaris (€)", format: ",.0f" },
+                            { field: "Vertrekreden", title: "Reden vertrek" }
+                        ]
+                    }
+                },
+                {
+                    data: { values: historyEvents },
+                    mark: { type: "text", dy: -14, fontSize: 10, color: "#1f2430" },
+                    encoding: {
+                        x: { field: "Startdatum", type: "temporal" },
+                        y: { field: "Salaris", type: "quantitative" },
+                        text: { field: "Gebeurtenis" }
+                    }
+                }
+            ]
+        });
+    }
+
+    // Performance/tevredenheid/betrokkenheid on a second, independent Y
+    // axis (right side) — periodic fact_workforce_snapshot data (see
+    // get_employee_score_trend), a different grain from the sparse career
+    // events above, sharing only the time axis, not the row grain.
+    // Deliberately no hardcoded score domain: Laura is still unifying
+    // Prestatie_Score onto the same 0-10 scale Tevredenheid_Score/
+    // Betrokkenheid_Score already use (in the data generator, not the app)
+    // — leaving the scale to fit whatever the data actually is keeps this
+    // correct before and after that change, no code update needed either way.
+    if (scoreTrend.length) {
+        layers.push({
+            data: { values: scoreTrend },
+            transform: [
+                {
+                    fold: ["Prestatie_Score", "Tevredenheid_Score", "Betrokkenheid_Score"],
+                    as: ["Score_Type", "Score_Waarde"]
+                }
+            ],
+            mark: { type: "line", point: { size: 25 }, opacity: 0.85, interpolate: "monotone" },
+            encoding: {
+                x: { field: "Snapshot_Date", type: "temporal" },
+                y: {
+                    field: "Score_Waarde", type: "quantitative", title: "Score",
+                    scale: { zero: true }, axis: { orient: "right", grid: false }
+                },
+                color: {
+                    field: "Score_Type", type: "nominal", title: "Score",
+                    scale: {
+                        domain: ["Prestatie_Score", "Tevredenheid_Score", "Betrokkenheid_Score"],
+                        range: ["#e07a5f", "#3d5a80", "#81b29a"]
+                    },
+                    legend: {
+                        labelExpr:
+                            "datum.label == 'Prestatie_Score' ? 'Performance' : " +
+                            "datum.label == 'Tevredenheid_Score' ? 'Tevredenheid' : 'Betrokkenheid'"
+                    }
+                },
+                tooltip: [
+                    { field: "Snapshot_Date", title: "Datum", type: "temporal" },
+                    { field: "Score_Type", title: "Type" },
+                    { field: "Score_Waarde", title: "Score", format: ".1f" }
+                ]
+            }
+        });
+    }
+
     vegaEmbed("#chart-timeline", {
         $schema: "https://vega.github.io/schema/vega-lite/v6.json",
         width: "container", height: "container",
         autosize: { type: "fit", contains: "padding" },
-        data: { values: historyEvents },
-        layer: [
-            {
-                mark: { type: "line", color: "#d8d8d8" },
-                encoding: {
-                    x: xEncoding,
-                    y: { field: "Salaris", type: "quantitative", title: "Salaris (€)" },
-                    order: { field: "Startdatum" }
-                }
-            },
-            {
-                mark: { type: "point", size: 160, filled: true },
-                encoding: {
-                    x: { field: "Startdatum", type: "temporal" },
-                    y: { field: "Salaris", type: "quantitative" },
-                    color: { field: "Gebeurtenis", type: "nominal", title: "Gebeurtenis" },
-                    tooltip: [
-                        { field: "Startdatum", title: "Datum", type: "temporal" },
-                        { field: "Gebeurtenis", title: "Gebeurtenis" },
-                        { field: "Functie_Naam", title: "Functie" },
-                        { field: "Salaris", title: "Salaris (€)", format: ",.0f" },
-                        { field: "Vertrekreden", title: "Reden vertrek" }
-                    ]
-                }
-            },
-            {
-                mark: { type: "text", dy: -14, fontSize: 10, color: "#1f2430" },
-                encoding: {
-                    x: { field: "Startdatum", type: "temporal" },
-                    y: { field: "Salaris", type: "quantitative" },
-                    text: { field: "Gebeurtenis" }
-                }
-            }
-        ],
+        layer: layers,
+        resolve: { scale: { y: "independent", color: "independent" } },
         config: { view: { stroke: null } }
     }, { actions: false });
 }

@@ -294,11 +294,13 @@ def profiel_page(
     # (changing a filter after picking someone shouldn't blank the page).
     snapshot = identity = None
     history: list[dict] = []
+    score_trend: list[dict] = []
     if employee_key_int is not None:
         snapshot = profile.get_employee_snapshot(employee_key_int, peildatum)
         if snapshot is not None:
             identity = profile.get_employee_identity(employee_key_int)
             history = profile.get_employee_history(employee_key_int)
+            score_trend = profile.get_employee_score_trend(employee_key_int)
 
     clear_filters_params = {}
     if as_of:
@@ -317,6 +319,7 @@ def profiel_page(
             "snapshot": snapshot,
             "identity": identity,
             "history_json": json.dumps(history, default=_json_default),
+            "score_trend_json": json.dumps(score_trend, default=_json_default),
             "clear_filters_url": "/profiel?" + "&".join(
                 f"{k}={v}" for k, v in clear_filters_params.items()
             ),
