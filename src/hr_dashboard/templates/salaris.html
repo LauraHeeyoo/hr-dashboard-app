@@ -38,7 +38,7 @@
     <div class="grid-stack-item-content kpi-card">
         <span class="tile-grip"></span>
         <div class="kpi-value" id="kpi-median-salaris">
-            {% if kpis.median_salaris %}€{{ "{:,.0f}".format(kpis.median_salaris).replace(",", ".") }}{% else %}—{% endif %}
+            {% if kpis.median_salaris is not none %}€{{ "{:,.0f}".format(kpis.median_salaris).replace(",", ".") }}{% else %}—{% endif %}
         </div>
         <div class="kpi-label">Mediaan salaris</div>
     </div>
@@ -63,7 +63,7 @@
     <div class="grid-stack-item-content kpi-card">
         <span class="tile-grip"></span>
         <div class="kpi-value">
-            <span id="kpi-benchmark-ratio">{% if kpis.gemiddeld_benchmark_ratio %}{{ "{:.1f}".format(kpis.gemiddeld_benchmark_ratio * 100) }}%{% else %}—{% endif %}</span><span class="kpi-indicator" id="kpi-benchmark-ratio-arrow"></span>
+            <span id="kpi-benchmark-ratio">{% if kpis.gemiddeld_benchmark_ratio is not none %}{{ "{:.1f}".format(kpis.gemiddeld_benchmark_ratio * 100) }}%{% else %}—{% endif %}</span><span class="kpi-indicator" id="kpi-benchmark-ratio-arrow"></span>
         </div>
         <div class="kpi-label">
             Gemiddeld t.o.v. benchmark
@@ -79,7 +79,7 @@
         <span class="tile-grip"></span>
         <a href="{{ medewerkers_urls.onder_benchmark }}">
             <div class="kpi-value">
-                <span id="kpi-pct-onder-benchmark">{% if kpis.pct_onder_benchmark %}{{ "{:.1f}".format(kpis.pct_onder_benchmark * 100) }}%{% else %}—{% endif %}</span><span class="kpi-indicator" id="kpi-pct-onder-benchmark-arrow"></span>
+                <span id="kpi-pct-onder-benchmark">{% if kpis.pct_onder_benchmark is not none %}{{ "{:.1f}".format(kpis.pct_onder_benchmark * 100) }}%{% else %}—{% endif %}</span><span class="kpi-indicator" id="kpi-pct-onder-benchmark-arrow"></span>
             </div>
             <div class="kpi-label">% medewerkers onder benchmark</div>
         </a>
@@ -577,7 +577,17 @@ function updateKpisForHighlight() {
     const subset = employeeRows.filter((row) => matchesHighlight(row, currentHighlight));
     const ratios = subset.map((r) => r.Benchmark_Ratio).filter((r) => r !== null && r !== undefined);
     const avgRatio = ratios.length ? ratios.reduce((a, b) => a + b, 0) / ratios.length : null;
-    const pctOnder = ratios.length ? ratios.filter((r) => r < 1.0).length / ratios.length : null;
+    // Binned by Benchmark_Status (same ±10% tolerance "Verdeling salaris
+    // t.o.v. benchmark" bins by), not a raw ratio < 1.0 threshold — see
+    // the matching comment in salary.py's get_salary_kpis for why (that
+    // raw version counted anyone within the "Rond benchmark" band, e.g.
+    // 92%, as "onder benchmark" too, contradicting the chart). Denominator
+    // is every row in the highlighted subset (matching the server query's
+    // COUNT(*)), not just the ones with a Benchmark_Ratio.
+    const pctOnder = subset.length
+        ? subset.filter((r) => r.Benchmark_Status === BENCHMARK_ORDER[0] || r.Benchmark_Status === BENCHMARK_ORDER[1]).length
+              / subset.length
+        : null;
 
     kpiElements.aantalMedewerkers.textContent = subset.length;
     kpiElements.medianSalaris.textContent = subset.length

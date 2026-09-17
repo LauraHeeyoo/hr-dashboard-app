@@ -225,15 +225,29 @@ def get_salary_kpis(as_of_date: date, filters: SalaryFilters) -> SalaryKpis:
         median_row = cur.fetchone()
         median_salaris = median_row[0] if median_row else None
 
+        # pct_onder_benchmark bins by Benchmark_Status (the same ±10%-
+        # tolerance bucketing "Verdeling salaris t.o.v. benchmark" bins by),
+        # not a raw Benchmark_Ratio < 1.0 threshold — that raw version
+        # counted anyone inside the "Rond benchmark" band (e.g. 92%) as
+        # "onder benchmark" too, which visibly contradicted the
+        # distribution chart showing the same people as "Rond benchmark"
+        # (Laura, after noticing this on the Directie department: "it needs
+        # to be binned. That makes more sense, right?"). This IS a
+        # deliberate departure from the original PBIP measure (`Percentage
+        # medewerkers onder benchmark op peildatum`, which used the same
+        # raw `Salaris < Benchmark_Salaris` comparison) — logged here per
+        # ARCHITECTURE.md §14's convention of recording PBI-comparability
+        # impact whenever a definition is consciously changed.
         cur.execute(
             f"""
             SELECT
                 AVG(Benchmark_Ratio) AS gemiddeld_benchmark_ratio,
-                AVG(CASE WHEN Benchmark_Ratio < 1.0 THEN 1.0 ELSE 0.0 END) AS pct_onder_benchmark,
+                AVG(CASE WHEN Benchmark_Status IN (?, ?) THEN 1.0 ELSE 0.0 END)
+                    AS pct_onder_benchmark,
                 COUNT(*) AS aantal_medewerkers
             FROM mcp.fn_workforce_snapshot_asof({_ASOF_PARAM_PLACEHOLDERS})
             """,
-            params,
+            (BENCHMARK_STATUS_ORDER[0], BENCHMARK_STATUS_ORDER[1], *params),
         )
         row = cur.fetchone()
         # AVG() on a SQL DECIMAL column comes back from pyodbc as
