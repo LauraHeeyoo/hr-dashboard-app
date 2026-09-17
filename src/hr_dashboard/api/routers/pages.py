@@ -325,6 +325,7 @@ def profiel_page(
                 ("Tevredenheid_Score", latest_scores.get("Tevredenheid_Score")),
                 ("Betrokkenheid_Score", latest_scores.get("Betrokkenheid_Score")),
                 ("Verzuim_Werkdagen", latest_scores.get("Verzuim_Werkdagen")),
+                ("Compa_Ratio_Interne_Schaal", snapshot.get("Compa_Ratio_Interne_Schaal")),
             )
         }
         peer_comparison["peer_count"] = peer_averages.get("Peer_Count") or 0

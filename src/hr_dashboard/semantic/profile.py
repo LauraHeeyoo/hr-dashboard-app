@@ -339,17 +339,21 @@ def get_employee_signals(snapshot: dict, score_trend: list[dict]) -> list[str]:
 
 def get_peer_group_averages(employee_key: int, afdeling: str, as_of_date: date) -> dict:
     """Department-peer averages for the "Vergelijking met peers" tile —
-    Salaris, Prestatie_Score, Tevredenheid_Score, Betrokkenheid_Score and
-    Verzuim_Werkdagen, averaged across every OTHER employee in the same
-    department, as of the same peildatum (Laura's proposal: "vs. their
-    own department... is a fairer comparison than one company-wide
-    blend").
+    Salaris, Prestatie_Score, Tevredenheid_Score, Betrokkenheid_Score,
+    Verzuim_Werkdagen and Compa_Ratio_Interne_Schaal, averaged across
+    every OTHER employee in the same department, as of the same
+    peildatum (Laura's proposal: "vs. their own department... is a
+    fairer comparison than one company-wide blend").
 
     A direct fact_workforce_snapshot query rather than
     mcp.fn_workforce_snapshot_asof — that function doesn't return
     Tevredenheid_Score/Betrokkenheid_Score/Verzuim_Werkdagen at all (only
     their derived bands/status), so this repeats just its "latest
     snapshot <= peildatum, per employee" join, not the whole function.
+    Compa_Ratio_Interne_Schaal isn't a raw column either there or here —
+    it's computed the exact same way the function computes it (position
+    between dim_salary_scale's own Minimum_Salaris/Maximum_Salaris), just
+    averaged across the peer group instead of returned per employee.
 
     Salaris is explicitly cast to DECIMAL before AVG() — SQL Server's
     AVG() of a plain INT column does integer division (truncates instead
@@ -365,8 +369,14 @@ def get_peer_group_averages(employee_key: int, afdeling: str, as_of_date: date) 
                 AVG(s.Tevredenheid_Score) AS Tevredenheid_Score,
                 AVG(s.Betrokkenheid_Score) AS Betrokkenheid_Score,
                 AVG(s.Verzuim_Werkdagen) AS Verzuim_Werkdagen,
+                AVG(CASE WHEN sca.Maximum_Salaris > sca.Minimum_Salaris
+                         THEN CAST(s.Salaris - sca.Minimum_Salaris AS DECIMAL(18, 4))
+                              / (sca.Maximum_Salaris - sca.Minimum_Salaris)
+                         ELSE NULL
+                    END) AS Compa_Ratio_Interne_Schaal,
                 COUNT(*) AS Peer_Count
             FROM dbo.fact_workforce_snapshot AS s
+            LEFT JOIN dbo.dim_salary_scale AS sca ON sca.SalaryScale_Key = s.SalaryScale_Key
             INNER JOIN (
                 SELECT Employee_Key, MAX(Snapshot_Date) AS Snapshot_Date
                 FROM dbo.fact_workforce_snapshot

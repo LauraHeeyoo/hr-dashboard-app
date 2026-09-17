@@ -158,7 +158,9 @@
     <div class="grid-stack-item-content chart-card">
         <span class="tile-grip"></span>
         <h2>Vergelijking met peers ({{ snapshot.Afdeling_Naam }})</h2>
-        <div id="peer-comparison-grid" class="profile-peer-grid"></div>
+        <div class="chart-scroll">
+            <div id="peer-comparison-grid" class="profile-peer-grid"></div>
+        </div>
     </div>
 </div>
 
@@ -211,7 +213,8 @@ const PEER_METRICS = [
     { key: "Prestatie_Score", label: "Performance", format: ".1f" },
     { key: "Tevredenheid_Score", label: "Tevredenheid", format: ".1f" },
     { key: "Betrokkenheid_Score", label: "Betrokkenheid", format: ".1f" },
-    { key: "Verzuim_Werkdagen", label: "Verzuim (dagen)", format: ".1f" }
+    { key: "Verzuim_Werkdagen", label: "Verzuim (dagen)", format: ".1f" },
+    { key: "Compa_Ratio_Interne_Schaal", label: "Compa-ratio", format: ".0%" }
 ];
 
 if (peerComparison && peerComparison.peer_count > 0) {
