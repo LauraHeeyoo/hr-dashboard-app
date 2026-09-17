@@ -113,7 +113,7 @@ body:has(.grid-stack) .app-header {
     align-items: center;
     gap: 8px;
     background: transparent;
-    border: 1px solid #6b7280;
+    border: none;
     border-radius: 8px;
     padding: 10px 16px;
     color: #eef1f6;
@@ -123,7 +123,6 @@ body:has(.grid-stack) .app-header {
 }
 
 .nav-menu-btn:hover {
-    border-color: var(--teal);
     color: var(--teal);
 }
 
