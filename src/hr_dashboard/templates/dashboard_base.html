@@ -80,6 +80,60 @@ document.querySelectorAll("select.nav-select").forEach((el) => {
     });
 });
 
+// Tooltip bubbles (".tooltip-icon" > ".tooltip-bubble", styles.css): a
+// bubble positioned with plain CSS (absolute, centered on its icon) got
+// its own edges silently clipped whenever it didn't fit inside its tile —
+// every tile clips overflow for its own rounded corners, and a bubble
+// wider/taller than a narrow KPI tile has nowhere to overflow TO (Laura:
+// "de tooltip valt nu in de tiles en is daardoor onleesbaar" — every line
+// missing its first character was the tile clipping the bubble's left
+// edge, since centering it on the icon pushed that edge past the tile's
+// own left border). Fixed by reparenting the bubble to <body> with
+// position:fixed while shown (escapes every tile's clipping and gridstack's
+// own CSS transform on the tile, either of which would otherwise still
+// affect a plain position:absolute/fixed bubble left nested inside), with
+// its position computed from the icon's own bounding rect and clamped to
+// the viewport so it can never run off-screen either. Generic and shared
+// here (not per-page) since any future page's own tooltip-icon should get
+// this for free, same as the nav-select swap above.
+document.querySelectorAll(".tooltip-icon").forEach((icon) => {
+    const bubble = icon.querySelector(".tooltip-bubble");
+    if (!bubble) return;
+
+    function show() {
+        document.body.appendChild(bubble);
+        bubble.style.position = "fixed";
+        bubble.classList.add("tooltip-bubble-visible");
+
+        const iconRect = icon.getBoundingClientRect();
+        const bubbleRect = bubble.getBoundingClientRect();
+        const margin = 8;
+        let left = iconRect.left + iconRect.width / 2 - bubbleRect.width / 2;
+        left = Math.max(margin, Math.min(left, window.innerWidth - bubbleRect.width - margin));
+        let top = iconRect.top - bubbleRect.height - margin;
+        if (top < margin) {
+            // Not enough room above (e.g. a short KPI tile) — below the
+            // icon instead, rather than clipping off the top.
+            top = iconRect.bottom + margin;
+        }
+        bubble.style.left = `${left}px`;
+        bubble.style.top = `${top}px`;
+    }
+
+    function hide() {
+        bubble.classList.remove("tooltip-bubble-visible");
+        icon.appendChild(bubble);
+        bubble.style.position = "";
+        bubble.style.left = "";
+        bubble.style.top = "";
+    }
+
+    icon.addEventListener("mouseenter", show);
+    icon.addEventListener("mouseleave", hide);
+    icon.addEventListener("focus", show);
+    icon.addEventListener("blur", hide);
+});
+
 {% block dashboard_script %}{% endblock %}
 
 // --- Drag-and-resize dashboard (gridstack.js) ---------------------------
