@@ -16,3 +16,12 @@ def get_last_refresh() -> datetime:
         cur = conn.cursor()
         cur.execute("SELECT last_run FROM dbo.simulation_state")
         return cur.fetchone()[0]
+
+
+def rows_as_dicts(cursor) -> list[dict]:
+    """A pyodbc cursor's fetchall() as plain dicts, keyed by column name —
+    moved here once profile.py needed the exact same thing salary.py
+    already had (as `_rows_as_dicts`); genuinely cross-domain, not a
+    Salaris-specific concept."""
+    columns = [c[0] for c in cursor.description]
+    return [dict(zip(columns, row)) for row in cursor.fetchall()]

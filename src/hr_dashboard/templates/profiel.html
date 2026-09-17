@@ -1,0 +1,222 @@
+{% extends "dashboard_base.html" %}
+{% block title %}Profiel — HR Dashboard{% endblock %}
+{% block grid_layout_key %}profielGridLayout{% endblock %}
+
+{% block dashboard_head %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/vega/6.4.0/vega.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/vega-lite/6.4.3/vega-lite.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/vega-embed/7.2.0/vega-embed.min.js"></script>
+{% endblock %}
+
+{% block page_title %}Profiel{% endblock %}
+
+{% block tiles %}
+{#
+  Hand-written, not the shared filter_rail macro (_macros.html) — this
+  page's field set is genuinely different (Performance/Tevredenheid
+  instead of Opleidingsniveau/Salarisgroep, plus the Medewerker picker
+  itself), exactly the "make an exception" case that macro's own docstring
+  anticipates. It still follows the same conventions every other rail
+  does: id="filter-form" for the shared auto-submit-on-change wiring
+  (dashboard_base.html), class="filter-rail" for the shared height auto-fit.
+#}
+<div class="grid-stack-item" gs-id="filter-rail" gs-x="0" gs-y="0" gs-w="12" gs-h="2" gs-min-w="2">
+    <aside class="grid-stack-item-content filter-rail">
+        <span class="tile-grip"></span>
+        <form method="get" action="/profiel" id="filter-form">
+            <div class="filter-field">
+                <label for="as_of">Peildatum</label>
+                <input type="date" id="as_of" name="as_of" value="{{ peildatum }}">
+            </div>
+            <div class="filter-field">
+                <label for="afdeling">Afdeling</label>
+                <select id="afdeling" name="afdeling">
+                    <option value="">Alle</option>
+                    {% for opt in filter_options.afdeling %}
+                    <option value="{{ opt }}" {% if filters.afdeling == opt %}selected{% endif %}>{{ opt }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="filter-field">
+                <label for="functie">Functie</label>
+                <select id="functie" name="functie">
+                    <option value="">Alle</option>
+                    {% for opt in filter_options.functie %}
+                    <option value="{{ opt }}" {% if filters.functie == opt %}selected{% endif %}>{{ opt }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="filter-field">
+                <label for="manager">Manager</label>
+                <select id="manager" name="manager">
+                    <option value="">Alle</option>
+                    {% for opt in filter_options.manager %}
+                    <option value="{{ opt }}" {% if filters.manager == opt %}selected{% endif %}>{{ opt }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="filter-field">
+                <label for="performance">Performance</label>
+                <select id="performance" name="performance">
+                    <option value="">Alle</option>
+                    {% for opt in filter_options.performance %}
+                    <option value="{{ opt }}" {% if filters.performance == opt %}selected{% endif %}>{{ opt }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="filter-field">
+                <label for="tevredenheid">Tevredenheid</label>
+                <select id="tevredenheid" name="tevredenheid">
+                    <option value="">Alle</option>
+                    {% for opt in filter_options.tevredenheid %}
+                    <option value="{{ opt }}" {% if filters.tevredenheid == opt %}selected{% endif %}>{{ opt }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="filter-field">
+                <label for="employee_key">Medewerker ({{ narrowed_employees | length }})</label>
+                <select id="employee_key" name="employee_key">
+                    <option value="">— Kies een medewerker —</option>
+                    {% for emp in narrowed_employees %}
+                    <option value="{{ emp.Employee_Key }}" {% if employee_key == emp.Employee_Key %}selected{% endif %}>{{ emp.Medewerker_Naam }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="filter-actions">
+                <a href="{{ clear_filters_url }}" class="btn btn-secondary">Wis filters</a>
+            </div>
+        </form>
+    </aside>
+</div>
+
+{% if snapshot %}
+<div class="grid-stack-item" gs-id="profile-identity" gs-x="0" gs-y="2" gs-w="12" gs-h="4" gs-min-w="6">
+    <div class="grid-stack-item-content chart-card">
+        <span class="tile-grip"></span>
+        <div class="profile-identity-body">
+            {% if identity.Avatar_URL %}
+            <img src="{{ identity.Avatar_URL }}" class="profile-avatar" alt="" onerror="this.style.display='none'">
+            {% endif %}
+            <div>
+                <h2 class="profile-name">{{ snapshot.Medewerker_Naam }}</h2>
+                <div class="profile-role">{{ snapshot.Functie_Naam }} — {{ snapshot.Afdeling_Naam }}</div>
+                <dl class="profile-fact-grid">
+                    <dt>Manager</dt><dd>{{ snapshot.Manager_Naam or "—" }}</dd>
+                    <dt>In dienst sinds</dt><dd>{{ identity.Aaneengesloten_Indienst_Datum }}</dd>
+                    <dt>Contract</dt><dd>{{ snapshot.Contracttype }}, {{ snapshot.Contracturen }} uur/week</dd>
+                    <dt>Status</dt>
+                    <dd>{% if identity.Datum_uitdienst and identity.Datum_uitdienst <= peildatum %}Uit dienst{% else %}In dienst{% endif %}</dd>
+                    <dt>Salaris t.o.v. benchmark</dt>
+                    <dd>{% if snapshot.Benchmark_Ratio is not none %}{{ "{:.0f}".format(snapshot.Benchmark_Ratio * 100) }}%{% else %}—{% endif %}</dd>
+                    <dt>Compa-ratio (eigen schaal)</dt>
+                    <dd>{% if snapshot.Compa_Ratio_Interne_Schaal is not none %}{{ "{:.0f}".format(snapshot.Compa_Ratio_Interne_Schaal * 100) }}%{% else %}—{% endif %}</dd>
+                    <dt>Performance</dt><dd>{{ snapshot.Performance_Bin or "—" }}</dd>
+                    <dt>Tevredenheid</dt><dd>{{ snapshot.Tevredenheidsband_Naam or "—" }}</dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="grid-stack-item" gs-id="profile-summary" gs-x="0" gs-y="6" gs-w="12" gs-h="4" gs-min-w="4">
+    <div class="grid-stack-item-content chart-card">
+        <span class="tile-grip"></span>
+        <h2>AI-samenvatting</h2>
+        <button type="button" class="btn btn-secondary" id="generate-summary-btn">Genereer samenvatting</button>
+        <div id="summary-result" class="profile-summary-text"></div>
+    </div>
+</div>
+
+<div class="grid-stack-item" gs-id="profile-timeline" gs-x="0" gs-y="10" gs-w="12" gs-h="5" gs-min-w="4">
+    <div class="grid-stack-item-content chart-card">
+        <span class="tile-grip"></span>
+        <h2>Loopbaan</h2>
+        <div id="chart-timeline" class="chart-canvas"></div>
+    </div>
+</div>
+{% else %}
+<div class="grid-stack-item" gs-id="profile-empty" gs-x="0" gs-y="2" gs-w="12" gs-h="3" gs-min-w="4">
+    <div class="grid-stack-item-content chart-card">
+        <span class="tile-grip"></span>
+        <p class="profile-empty-state">
+            Kies hierboven een afdeling, functie, manager, performance- of
+            tevredenheidsband om de lijst met medewerkers te versmallen, en
+            selecteer daarna een medewerker om het profiel te zien.
+        </p>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block dashboard_script %}
+{% if snapshot %}
+const employeeKey = {{ employee_key }};
+const peildatum = "{{ peildatum }}";
+const historyEvents = {{ history_json | safe }};
+
+if (historyEvents.length) {
+    vegaEmbed("#chart-timeline", {
+        $schema: "https://vega.github.io/schema/vega-lite/v6.json",
+        width: "container", height: "container",
+        autosize: { type: "fit", contains: "padding" },
+        data: { values: historyEvents },
+        layer: [
+            {
+                mark: { type: "line", color: "#d8d8d8" },
+                encoding: {
+                    x: { field: "Startdatum", type: "temporal", title: null },
+                    y: { datum: 0, axis: null },
+                    order: { field: "Startdatum" }
+                }
+            },
+            {
+                mark: { type: "point", size: 160, filled: true, color: "#10bdc6" },
+                encoding: {
+                    x: { field: "Startdatum", type: "temporal" },
+                    y: { datum: 0, axis: null },
+                    tooltip: [
+                        { field: "Startdatum", title: "Datum", type: "temporal" },
+                        { field: "Gebeurtenis", title: "Gebeurtenis" },
+                        { field: "Functie_Naam", title: "Functie" },
+                        { field: "Salaris", title: "Salaris (€)", format: ",.0f" },
+                        { field: "Vertrekreden", title: "Reden vertrek" }
+                    ]
+                }
+            },
+            {
+                mark: { type: "text", dy: -18, fontSize: 10, color: "#1f2430" },
+                encoding: {
+                    x: { field: "Startdatum", type: "temporal" },
+                    y: { datum: 0, axis: null },
+                    text: { field: "Gebeurtenis" }
+                }
+            }
+        ],
+        config: { view: { stroke: null }, axis: { grid: false } }
+    }, { actions: false });
+}
+
+// AI-samenvatting: a plain fetch-on-click, not part of any highlight/chart
+// mechanism (this page has none — a single-employee page has no cross-
+// chart population to highlight between) — one call to
+// profile_summary.py's endpoint, which itself calls Azure OpenAI once
+// over this employee's own already-fetched, already-correct data.
+const summaryBtn = document.getElementById("generate-summary-btn");
+const summaryResult = document.getElementById("summary-result");
+summaryBtn.addEventListener("click", async () => {
+    summaryBtn.disabled = true;
+    const previousText = summaryBtn.textContent;
+    summaryBtn.textContent = "Bezig...";
+    try {
+        const res = await fetch(`/profiel/samenvatting?employee_key=${employeeKey}&as_of=${peildatum}`);
+        const data = await res.json();
+        summaryResult.textContent = data.summary || data.error || "Geen samenvatting beschikbaar.";
+    } catch (e) {
+        summaryResult.textContent = "Kon geen samenvatting genereren.";
+    } finally {
+        summaryBtn.disabled = false;
+        summaryBtn.textContent = previousText;
+    }
+});
+{% endif %}
+{% endblock %}

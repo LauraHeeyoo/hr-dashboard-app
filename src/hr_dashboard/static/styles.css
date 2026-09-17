@@ -892,6 +892,67 @@ body:has(.grid-stack) .app-header {
     white-space: normal;
 }
 
+/* Profiel page — the identity card, the AI-summary tile, the timeline. */
+.profile-identity-body {
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+}
+
+.profile-avatar {
+    width: 84px;
+    height: 84px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex: none;
+    background: var(--page-bg);
+}
+
+.profile-name {
+    margin: 0 0 2px;
+    font-size: 1.3rem;
+    color: var(--navy);
+}
+
+.profile-role {
+    color: var(--text-muted);
+    margin-bottom: 12px;
+}
+
+.profile-fact-grid {
+    display: grid;
+    grid-template-columns: auto auto;
+    column-gap: 16px;
+    row-gap: 6px;
+    margin: 0;
+}
+
+.profile-fact-grid dt {
+    color: var(--text-muted);
+    font-size: 0.82rem;
+}
+
+.profile-fact-grid dd {
+    margin: 0;
+    font-weight: 600;
+    color: var(--navy);
+}
+
+.profile-empty-state {
+    color: var(--text-muted);
+}
+
+.profile-summary-text {
+    margin-top: 12px;
+    line-height: 1.5;
+    color: var(--navy);
+}
+
+.profile-summary-text:empty::before {
+    content: "Klik op \"Genereer samenvatting\" voor een kort, AI-gegenereerd profiel op basis van de gegevens hierboven.";
+    color: var(--text-muted);
+}
+
 .app-footer {
     display: flex;
     justify-content: space-between;

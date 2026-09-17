@@ -18,6 +18,7 @@ from dataclasses import dataclass, fields, replace
 from datetime import date
 
 from hr_dashboard.db.connection import get_connection
+from hr_dashboard.semantic.common import rows_as_dicts as _rows_as_dicts
 
 # Allowlist: catalog key -> real SQL identifier. This is the mechanism, not
 # string interpolation, that keeps "which column to group by" safe even
@@ -134,11 +135,6 @@ class SalaryFilters:
 # everywhere the function is called from Python, so the placeholder count
 # only needs updating in one place if the function ever gains another param.
 _ASOF_PARAM_PLACEHOLDERS = "?, " * 5 + "?"
-
-
-def _rows_as_dicts(cursor) -> list[dict]:
-    columns = [c[0] for c in cursor.description]
-    return [dict(zip(columns, row)) for row in cursor.fetchall()]
 
 
 def _snapshot_asof_sql(select_clause: str) -> str:

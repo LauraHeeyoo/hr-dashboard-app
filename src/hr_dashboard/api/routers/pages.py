@@ -5,7 +5,8 @@ from decimal import Decimal
 from fastapi import APIRouter, Query, Request
 from fastapi.templating import Jinja2Templates
 
-from hr_dashboard.semantic import common, salary
+from hr_dashboard.semantic import common, profile, salary
+from hr_dashboard.semantic.profile import ProfileFilters
 from hr_dashboard.semantic.salary import SalaryFilters
 
 router = APIRouter()
@@ -248,6 +249,73 @@ def salaris_medewerkers_page(
             "filters": filters,
             "filter_options": filter_options,
             "clear_filters_url": "/salaris/medewerkers?" + "&".join(
+                f"{k}={v}" for k, v in clear_filters_params.items()
+            ),
+        },
+    )
+
+
+@router.get("/profiel")
+def profiel_page(
+    request: Request,
+    as_of: date | None = Query(default=None),
+    afdeling: str | None = Query(default=None),
+    functie: str | None = Query(default=None),
+    manager: str | None = Query(default=None),
+    performance: str | None = Query(default=None),
+    tevredenheid: str | None = Query(default=None),
+    # A plain `int | None` param here 422s on the empty string the
+    # "— Kies een medewerker —" placeholder option submits (FastAPI won't
+    # coerce "" to None for an int type the way it does for the str|None
+    # filter fields above) — every OTHER rail field change auto-submits
+    # the whole form (dashboard_base.html), including this one at
+    # whatever it's currently set to, so leaving no employee selected and
+    # then changing e.g. Afdeling would 422 the whole page.
+    employee_key: str | None = Query(default=None),
+):
+    peildatum = as_of or salary.get_latest_snapshot_date()
+    employee_key_int = int(employee_key) if employee_key else None
+    filters = ProfileFilters(
+        afdeling=_none_if_blank(afdeling),
+        functie=_none_if_blank(functie),
+        manager=_none_if_blank(manager),
+        performance=_none_if_blank(performance),
+        tevredenheid=_none_if_blank(tevredenheid),
+    )
+
+    filter_options = profile.get_profile_filter_options(peildatum, filters)
+    narrowed_employees = profile.get_narrowed_employees(peildatum, filters)
+
+    # A selected employee is looked up regardless of whether they still
+    # match the CURRENT rail filters — the rail is a search aid for
+    # finding someone, not a hard gate on who stays visible once picked
+    # (changing a filter after picking someone shouldn't blank the page).
+    snapshot = identity = None
+    history: list[dict] = []
+    if employee_key_int is not None:
+        snapshot = profile.get_employee_snapshot(employee_key_int, peildatum)
+        if snapshot is not None:
+            identity = profile.get_employee_identity(employee_key_int)
+            history = profile.get_employee_history(employee_key_int)
+
+    clear_filters_params = {}
+    if as_of:
+        clear_filters_params["as_of"] = as_of.isoformat()
+
+    return templates.TemplateResponse(
+        request,
+        "profiel.html",
+        {
+            "peildatum": peildatum,
+            "last_refresh": _last_refresh_label(),
+            "filters": filters,
+            "filter_options": filter_options,
+            "narrowed_employees": narrowed_employees,
+            "employee_key": employee_key_int,
+            "snapshot": snapshot,
+            "identity": identity,
+            "history_json": json.dumps(history, default=_json_default),
+            "clear_filters_url": "/profiel?" + "&".join(
                 f"{k}={v}" for k, v in clear_filters_params.items()
             ),
         },

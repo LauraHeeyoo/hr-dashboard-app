@@ -11,10 +11,10 @@
     <header class="app-header">
         <nav class="app-nav">
             <span class="nav-tab disabled" title="Nog niet gebouwd">Highlights</span>
-            <span class="nav-tab disabled" title="Nog niet gebouwd">Profiel</span>
+            <a href="/profiel" class="nav-tab{% if request.url.path.startswith('/profiel') %} active{% endif %}">Profiel</a>
             <span class="nav-tab disabled" title="Nog niet gebouwd">Samenstelling</span>
             <span class="nav-tab disabled" title="Nog niet gebouwd">Beleving en performance</span>
-            <a href="/salaris" class="nav-tab active">Salaris</a>
+            <a href="/salaris" class="nav-tab{% if request.url.path.startswith('/salaris') %} active{% endif %}">Salaris</a>
             <span class="nav-tab disabled" title="Nog niet gebouwd">Recruitment</span>
             <span class="nav-tab disabled" title="Nog niet gebouwd">Verzuim</span>
             <span class="nav-tab disabled" title="Nog niet gebouwd">Incidenten</span>

@@ -23,7 +23,10 @@ from hr_dashboard.semantic import salary
 _client: AzureOpenAI | None = None
 
 
-def _get_client() -> AzureOpenAI:
+def get_client() -> AzureOpenAI:
+    """Shared by every LLM-calling feature (the planner call below, and
+    Profiel's employee-summary generation in llm/profile.py) — one
+    lazily-constructed client, not one per feature."""
     global _client
     if _client is None:
         if not settings.azure_openai_api_key or not settings.azure_openai_endpoint:
@@ -89,7 +92,7 @@ def _build_instructions(
 def ask_planner(
     question: str, filter_options: dict[str, list[str]], earliest_date: date, latest_date: date
 ) -> VizRequest:
-    client = _get_client()
+    client = get_client()
     result = client.responses.parse(
         model=settings.azure_openai_deployment,
         instructions=_build_instructions(filter_options, earliest_date, latest_date),
