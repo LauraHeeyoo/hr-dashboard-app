@@ -1,0 +1,87 @@
+{#
+  Shared building blocks pulled out of individual pages once the same
+  markup started drifting between them — Salaris got several rounds of
+  design changes (drop "Toepassen", full-width-on-top layout, ghost-style
+  "Wis filters") that never propagated to the medewerkers detail page,
+  since each page held its own hand-copied filter-rail HTML. Import this
+  in a page template with {% import "_macros.html" as macros %} and call
+  e.g. macros.filter_rail(...) from inside {% block tiles %}.
+
+  filter_rail() renders the whole tile (including the grid-stack-item
+  wrapper), always full-width-on-top and always auto-sizing its own
+  height to its content (dashboard_base.html's ResizeObserver targets any
+  .filter-rail, so a page with more or fewer fields than Salaris needs no
+  extra work — that auto-fit is exactly what makes one shared layout safe
+  across pages with different filter counts).
+
+  Every page using this shares the same 6 fields (Peildatum, Afdeling,
+  Functie, Manager, Opleidingsniveau, Salarisgroep) — true for both
+  current pages. A future page needing a genuinely different field set
+  is the "make an exception" case Laura anticipated: hand-write that
+  page's own filter-rail rather than contorting this macro to cover every
+  possible field combination.
+#}
+{% macro filter_rail(action, peildatum, filter_options, filters, clear_filters_url, extra_hidden={}, clear_label="Wis filters") %}
+<div class="grid-stack-item" gs-id="filter-rail" gs-x="0" gs-y="0" gs-w="12" gs-h="2" gs-min-w="2">
+    <aside class="grid-stack-item-content filter-rail">
+        <span class="tile-grip"></span>
+        <form method="get" action="{{ action }}" id="filter-form">
+            <div class="filter-field">
+                <label for="as_of">Peildatum</label>
+                <input type="date" id="as_of" name="as_of" value="{{ peildatum }}">
+            </div>
+            <div class="filter-field">
+                <label for="afdeling">Afdeling</label>
+                <select id="afdeling" name="afdeling">
+                    <option value="">Alle</option>
+                    {% for opt in filter_options.afdeling %}
+                    <option value="{{ opt }}" {% if filters.afdeling == opt %}selected{% endif %}>{{ opt }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="filter-field">
+                <label for="functie">Functie</label>
+                <select id="functie" name="functie">
+                    <option value="">Alle</option>
+                    {% for opt in filter_options.functie %}
+                    <option value="{{ opt }}" {% if filters.functie == opt %}selected{% endif %}>{{ opt }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="filter-field">
+                <label for="manager">Manager</label>
+                <select id="manager" name="manager">
+                    <option value="">Alle</option>
+                    {% for opt in filter_options.manager %}
+                    <option value="{{ opt }}" {% if filters.manager == opt %}selected{% endif %}>{{ opt }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="filter-field">
+                <label for="opleidingsniveau">Opleidingsniveau</label>
+                <select id="opleidingsniveau" name="opleidingsniveau">
+                    <option value="">Alle</option>
+                    {% for opt in filter_options.opleidingsniveau %}
+                    <option value="{{ opt }}" {% if filters.opleidingsniveau == opt %}selected{% endif %}>{{ opt }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="filter-field">
+                <label for="salaris_categorie">Salarisgroep</label>
+                <select id="salaris_categorie" name="salaris_categorie">
+                    <option value="">Alle</option>
+                    {% for opt in filter_options.salaris_categorie %}
+                    <option value="{{ opt }}" {% if filters.salaris_categorie == opt %}selected{% endif %}>{{ opt }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% for name, value in extra_hidden.items() %}
+            <input type="hidden" name="{{ name }}" value="{{ value }}">
+            {% endfor %}
+            <div class="filter-actions">
+                <a href="{{ clear_filters_url }}" class="btn btn-secondary">{{ clear_label }}</a>
+            </div>
+        </form>
+    </aside>
+</div>
+{% endmacro %}

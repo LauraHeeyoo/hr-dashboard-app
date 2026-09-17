@@ -1,4 +1,5 @@
 {% extends "dashboard_base.html" %}
+{% import "_macros.html" as macros %}
 {% block title %}Medewerkers — Salaris — HR Dashboard{% endblock %}
 {% block grid_layout_key %}medewerkersGridLayout{% endblock %}
 
@@ -9,69 +10,17 @@
 {% endblock %}
 
 {% block tiles %}
-<div class="grid-stack-item" gs-id="filter-rail" gs-x="0" gs-y="0" gs-w="3" gs-h="14" gs-min-w="2">
-    <aside class="grid-stack-item-content filter-rail">
-        <span class="tile-grip"></span>
-        <form method="get" action="/salaris/medewerkers" id="filter-form">
-            <div class="filter-field">
-                <label for="as_of">Peildatum</label>
-                <input type="date" id="as_of" name="as_of" value="{{ peildatum }}">
-            </div>
-            <div class="filter-field">
-                <label for="afdeling">Afdeling</label>
-                <select id="afdeling" name="afdeling">
-                    <option value="">Alle</option>
-                    {% for opt in filter_options.afdeling %}
-                    <option value="{{ opt }}" {% if filters.afdeling == opt %}selected{% endif %}>{{ opt }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="filter-field">
-                <label for="functie">Functie</label>
-                <select id="functie" name="functie">
-                    <option value="">Alle</option>
-                    {% for opt in filter_options.functie %}
-                    <option value="{{ opt }}" {% if filters.functie == opt %}selected{% endif %}>{{ opt }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="filter-field">
-                <label for="manager">Manager</label>
-                <select id="manager" name="manager">
-                    <option value="">Alle</option>
-                    {% for opt in filter_options.manager %}
-                    <option value="{{ opt }}" {% if filters.manager == opt %}selected{% endif %}>{{ opt }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="filter-field">
-                <label for="opleidingsniveau">Opleidingsniveau</label>
-                <select id="opleidingsniveau" name="opleidingsniveau">
-                    <option value="">Alle</option>
-                    {% for opt in filter_options.opleidingsniveau %}
-                    <option value="{{ opt }}" {% if filters.opleidingsniveau == opt %}selected{% endif %}>{{ opt }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="filter-field">
-                <label for="salaris_categorie">Salarisgroep</label>
-                <select id="salaris_categorie" name="salaris_categorie">
-                    <option value="">Alle</option>
-                    {% for opt in filter_options.salaris_categorie %}
-                    <option value="{{ opt }}" {% if filters.salaris_categorie == opt %}selected{% endif %}>{{ opt }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <input type="hidden" name="subset" value="{{ subset }}">
-            <div class="filter-actions">
-                <button type="submit" class="btn btn-primary">Toepassen</button>
-                <a href="{{ clear_filters_url }}" class="btn btn-secondary">Wis alle filters</a>
-            </div>
-        </form>
-    </aside>
-</div>
+{{ macros.filter_rail(
+    action="/salaris/medewerkers",
+    peildatum=peildatum,
+    filter_options=filter_options,
+    filters=filters,
+    clear_filters_url=clear_filters_url,
+    extra_hidden={"subset": subset},
+    clear_label="Wis alle filters"
+) }}
 
-<div class="grid-stack-item" gs-id="medewerkers-table" gs-x="3" gs-y="0" gs-w="9" gs-h="14" gs-min-w="4">
+<div class="grid-stack-item" gs-id="medewerkers-table" gs-x="0" gs-y="2" gs-w="12" gs-h="14" gs-min-w="4">
     <div class="grid-stack-item-content chart-card">
         <span class="tile-grip"></span>
         <div class="chart-scroll">
