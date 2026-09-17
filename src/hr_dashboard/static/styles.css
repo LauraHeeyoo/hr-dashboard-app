@@ -564,16 +564,6 @@ body:has(.grid-stack) .app-header {
     vertical-align: middle;
 }
 
-/* Same reasoning for the gender pay gap KPI, but as words instead of an
-   arrow — "who earns more" isn't a magnitude/threshold question the way
-   the benchmark KPIs are, so a directional arrow doesn't fit; a plain
-   clause reads unambiguously regardless of how the background tint is
-   perceived. */
-#kpi-paygap-direction {
-    display: block;
-    font-weight: 600;
-}
-
 /* "Aantal medewerkers" / "% onder benchmark" drill through to the employee
    detail table — the whole tile is the click target, styled the same as
    any other tile at rest so the affordance reads as "clickable card", not

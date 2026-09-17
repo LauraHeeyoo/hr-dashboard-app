@@ -150,7 +150,6 @@
             <span class="tooltip-icon" tabindex="0">?
                 <span class="tooltip-bubble" role="tooltip">Gecorrigeerd voor functie: per functietitel met zowel mannelijke als vrouwelijke medewerkers wordt het gemiddelde salarisverschil berekend, en die verschillen worden gewogen naar koppen samengevoegd. Een positief percentage betekent dat mannen gemiddeld een hoger salaris hebben dan vrouwen; een negatief percentage betekent dat vrouwen gemiddeld een hoger salaris hebben. Ongecorrigeerd (simpel gemiddelde m.v.): {{ '{:.1f}'.format(gender_pay_gap.ongecorrigeerd_pct * 100) if gender_pay_gap.ongecorrigeerd_pct is not none else '—' }}%. Gebaseerd op {{ gender_pay_gap.aantal_man }} mannelijke en {{ gender_pay_gap.aantal_vrouw }} vrouwelijke medewerkers over {{ gender_pay_gap.aantal_vergelijkbare_functies }} vergelijkbare functies.</span>
             </span>
-            <span id="kpi-paygap-direction"></span>
         </div>
     </div>
 </div>
@@ -512,17 +511,12 @@ const PAYGAP_DEAD_ZONE = 0.005;
 const PAYGAP_CAP = 0.10;
 function applyPaygapStyle(pct) {
     const card = document.getElementById("kpi-gender-pay-gap").closest(".kpi-card");
-    const directionEl = document.getElementById("kpi-paygap-direction");
     if (pct === null || pct === undefined || Math.abs(pct) < PAYGAP_DEAD_ZONE) {
         card.style.backgroundColor = "";
-        directionEl.textContent = "";
         return;
     }
     const t = (Math.abs(pct) - PAYGAP_DEAD_ZONE) / (PAYGAP_CAP - PAYGAP_DEAD_ZONE);
     card.style.backgroundColor = mixHex("#ffffff", pct > 0 ? KPI_MANNEN : KPI_VROUWEN, t);
-    directionEl.textContent = pct > 0
-        ? "mannen hebben gemiddeld een hoger salaris"
-        : "vrouwen hebben gemiddeld een hoger salaris";
 }
 
 // Server-berekende startwaarden — ook wat updateKpisForHighlight() teruggeeft
