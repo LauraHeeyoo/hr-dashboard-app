@@ -14,7 +14,7 @@
 {% endblock %}
 
 {% block tiles %}
-<div class="grid-stack-item" gs-id="filter-rail" gs-x="0" gs-y="0" gs-w="3" gs-h="11">
+<div class="grid-stack-item" gs-id="filter-rail" gs-x="0" gs-y="0" gs-w="12" gs-h="3" gs-min-w="2">
     <aside class="grid-stack-item-content filter-rail">
         <span class="tile-grip"></span>
         <form method="get" action="/salaris" id="filter-form">
@@ -78,7 +78,7 @@
     </aside>
 </div>
 
-<div class="grid-stack-item" gs-id="kpi-mediaan" gs-x="3" gs-y="0" gs-w="3" gs-h="3">
+<div class="grid-stack-item" gs-id="kpi-mediaan" gs-x="0" gs-y="3" gs-w="2" gs-h="3" gs-min-w="2">
     <div class="grid-stack-item-content kpi-card">
         <span class="tile-grip"></span>
         <div class="kpi-value" id="kpi-median-salaris">
@@ -88,7 +88,7 @@
     </div>
 </div>
 
-<div class="grid-stack-item" gs-id="kpi-benchmark-ratio" gs-x="6" gs-y="0" gs-w="3" gs-h="3">
+<div class="grid-stack-item" gs-id="kpi-benchmark-ratio" gs-x="10" gs-y="3" gs-w="2" gs-h="3" gs-min-w="2">
     <div class="grid-stack-item-content kpi-card">
         <span class="tile-grip"></span>
         <div class="kpi-value" id="kpi-benchmark-ratio">
@@ -101,7 +101,7 @@
     </div>
 </div>
 
-<div class="grid-stack-item" gs-id="kpi-onder-benchmark" gs-x="9" gs-y="0" gs-w="3" gs-h="3">
+<div class="grid-stack-item" gs-id="kpi-onder-benchmark" gs-x="6" gs-y="3" gs-w="2" gs-h="3" gs-min-w="2">
     <div class="grid-stack-item-content kpi-card kpi-card-clickable">
         <span class="tile-grip"></span>
         <a href="{{ medewerkers_urls.onder_benchmark }}">
@@ -113,7 +113,7 @@
     </div>
 </div>
 
-<div class="grid-stack-item" gs-id="kpi-aantal" gs-x="3" gs-y="3" gs-w="3" gs-h="3">
+<div class="grid-stack-item" gs-id="kpi-aantal" gs-x="8" gs-y="3" gs-w="2" gs-h="3" gs-min-w="2">
     <div class="grid-stack-item-content kpi-card kpi-card-clickable">
         <span class="tile-grip"></span>
         <a href="{{ medewerkers_urls.alle }}">
@@ -123,7 +123,7 @@
     </div>
 </div>
 
-<div class="grid-stack-item" gs-id="kpi-loonsom" gs-x="6" gs-y="3" gs-w="3" gs-h="3">
+<div class="grid-stack-item" gs-id="kpi-loonsom" gs-x="4" gs-y="3" gs-w="2" gs-h="3" gs-min-w="2">
     <div class="grid-stack-item-content kpi-card">
         <span class="tile-grip"></span>
         <div class="kpi-value" id="kpi-totale-loonsom">
@@ -136,7 +136,7 @@
     </div>
 </div>
 
-<div class="grid-stack-item" gs-id="kpi-paygap" gs-x="9" gs-y="3" gs-w="3" gs-h="3">
+<div class="grid-stack-item" gs-id="kpi-paygap" gs-x="2" gs-y="3" gs-w="2" gs-h="3" gs-min-w="2">
     <div class="grid-stack-item-content kpi-card">
         <span class="tile-grip"></span>
         <div class="kpi-value" id="kpi-gender-pay-gap">
@@ -149,7 +149,7 @@
     </div>
 </div>
 
-<div class="grid-stack-item" gs-id="chart-distribution" gs-x="3" gs-y="6" gs-w="9" gs-h="5">
+<div class="grid-stack-item" gs-id="chart-distribution" gs-x="0" gs-y="19" gs-w="4" gs-h="5" gs-min-w="3">
     <div class="grid-stack-item-content chart-card">
         <span class="tile-grip"></span>
         <h2>Spreiding salaris</h2>
@@ -157,7 +157,7 @@
     </div>
 </div>
 
-<div class="grid-stack-item" gs-id="chart-tenure" gs-x="3" gs-y="11" gs-w="9" gs-h="5">
+<div class="grid-stack-item" gs-id="chart-tenure" gs-x="4" gs-y="19" gs-w="4" gs-h="5" gs-min-w="3">
     <div class="grid-stack-item-content chart-card">
         <span class="tile-grip"></span>
         <h2>Salaris versus dienstjaren</h2>
@@ -165,7 +165,7 @@
     </div>
 </div>
 
-<div class="grid-stack-item" gs-id="chart-comparatio" gs-x="3" gs-y="16" gs-w="9" gs-h="5">
+<div class="grid-stack-item" gs-id="chart-comparatio" gs-x="8" gs-y="19" gs-w="4" gs-h="5" gs-min-w="3">
     <div class="grid-stack-item-content chart-card">
         <span class="tile-grip"></span>
         <h2>
@@ -176,13 +176,20 @@
     </div>
 </div>
 
-<div class="grid-stack-item" gs-id="chart-headcount" gs-x="3" gs-y="21" gs-w="9" gs-h="6">
+<div class="grid-stack-item" gs-id="chart-headcount" gs-x="6" gs-y="13" gs-w="6" gs-h="6" gs-min-w="5">
     <div class="grid-stack-item-content chart-card">
         <span class="tile-grip"></span>
         <div class="dimension-switcher">
-            {% for key, label in dimension_options.items() %}
-            <a href="{{ headcount_dimension_urls[key] }}" class="dimension-pill {% if dim_headcount == key %}active{% endif %}">{{ label }}</a>
-            {% endfor %}
+            <div class="dimension-switcher-pills">
+                {% for key, label in dimension_options.items() %}
+                <a href="{{ headcount_dimension_urls[key] }}" class="dimension-pill {% if dim_headcount == key %}active{% endif %}">{{ label }}</a>
+                {% endfor %}
+            </div>
+            <select class="nav-select">
+                {% for key, label in dimension_options.items() %}
+                <option value="{{ headcount_dimension_urls[key] }}" {% if dim_headcount == key %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
         </div>
         <h2>Aantal medewerkers, per {{ headcount_title|lower }}</h2>
         <div class="chart-scroll">
@@ -191,13 +198,20 @@
     </div>
 </div>
 
-<div class="grid-stack-item" gs-id="chart-benchmark" gs-x="3" gs-y="27" gs-w="9" gs-h="6">
+<div class="grid-stack-item" gs-id="chart-benchmark" gs-x="0" gs-y="13" gs-w="6" gs-h="6" gs-min-w="5">
     <div class="grid-stack-item-content chart-card">
         <span class="tile-grip"></span>
         <div class="dimension-switcher">
-            {% for key, label in dimension_options.items() %}
-            <a href="{{ benchmark_dimension_urls[key] }}" class="dimension-pill {% if dim_benchmark == key %}active{% endif %}">{{ label }}</a>
-            {% endfor %}
+            <div class="dimension-switcher-pills">
+                {% for key, label in dimension_options.items() %}
+                <a href="{{ benchmark_dimension_urls[key] }}" class="dimension-pill {% if dim_benchmark == key %}active{% endif %}">{{ label }}</a>
+                {% endfor %}
+            </div>
+            <select class="nav-select">
+                {% for key, label in dimension_options.items() %}
+                <option value="{{ benchmark_dimension_urls[key] }}" {% if dim_benchmark == key %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
         </div>
         <h2>Verdeling salaris t.o.v. benchmark, per {{ benchmark_title|lower }}</h2>
         <div class="chart-scroll">
@@ -206,13 +220,20 @@
     </div>
 </div>
 
-<div class="grid-stack-item" gs-id="chart-new-hire" gs-x="3" gs-y="33" gs-w="9" gs-h="6">
+<div class="grid-stack-item" gs-id="chart-new-hire" gs-x="6" gs-y="6" gs-w="6" gs-h="7" gs-min-w="5">
     <div class="grid-stack-item-content chart-card">
         <span class="tile-grip"></span>
         <div class="dimension-switcher">
-            {% for key, label in dimension_options.items() %}
-            <a href="{{ new_hire_dimension_urls[key] }}" class="dimension-pill {% if dim_new_hire == key %}active{% endif %}">{{ label }}</a>
-            {% endfor %}
+            <div class="dimension-switcher-pills">
+                {% for key, label in dimension_options.items() %}
+                <a href="{{ new_hire_dimension_urls[key] }}" class="dimension-pill {% if dim_new_hire == key %}active{% endif %}">{{ label }}</a>
+                {% endfor %}
+            </div>
+            <select class="nav-select">
+                {% for key, label in dimension_options.items() %}
+                <option value="{{ new_hire_dimension_urls[key] }}" {% if dim_new_hire == key %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
         </div>
         <h2>Startsalaris versus huidig salaris, per {{ new_hire_title|lower }}</h2>
         <div class="chart-scroll">
@@ -221,7 +242,7 @@
     </div>
 </div>
 
-<div class="grid-stack-item" gs-id="chart-lfl" gs-x="3" gs-y="39" gs-w="9" gs-h="6">
+<div class="grid-stack-item" gs-id="chart-lfl" gs-x="0" gs-y="24" gs-w="12" gs-h="6" gs-min-w="3">
     <div class="grid-stack-item-content chart-card">
         <span class="tile-grip"></span>
         <div class="lfl-header">
@@ -245,7 +266,7 @@
     </div>
 </div>
 
-<div class="grid-stack-item" gs-id="chat" gs-x="3" gs-y="45" gs-w="9" gs-h="7">
+<div class="grid-stack-item" gs-id="chat" gs-x="0" gs-y="6" gs-w="6" gs-h="7" gs-min-w="5">
     <div class="grid-stack-item-content chart-card">
         <span class="tile-grip"></span>
         <h2>Vraag het aan de data</h2>
