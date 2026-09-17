@@ -198,19 +198,34 @@ def get_employee_history(employee_key: int) -> list[dict]:
     'Functiehistorie tot peildatum' DAX measure (a CONCATENATEX text-
     builder): reimplementing this straight from the raw event rows is
     simpler than reverse-engineering that DAX, and gives the timeline chart
-    structured data instead of a pre-formatted string."""
+    structured data instead of a pre-formatted string.
+
+    Each fact_employment row is one continuous "stint" (Startdatum ->
+    Einddatum) with a Gebeurtenis label — for every row except the very
+    last one, that label describes what happened AT Startdatum (a hire,
+    promotion, transfer, raise starts a new stint). "Uit dienst" breaks
+    that pattern: it's inherently a stint-ENDING event, so its real date
+    is that row's Einddatum, not its Startdatum — confirmed directly
+    against dim_employee.Datum_uitdienst, which matches the "Uit dienst"
+    row's Einddatum, not its Startdatum (Laura caught this: a departure
+    date shown on "Loopbaan" didn't match the database). Gebeurtenis_Datum
+    below is the one column the timeline chart should actually plot
+    events at; Startdatum/Einddatum stay in the result too since the
+    tooltip/text still want to show a real stint's boundaries."""
     with get_connection() as conn:
         cur = conn.cursor()
         cur.execute(
             """
             SELECT fe.Startdatum, fe.Einddatum, det.Gebeurtenis, fe.Salaris,
-                   r.Functie_Naam, fe.Contracttype, dr.Vertrekreden
+                   r.Functie_Naam, fe.Contracttype, dr.Vertrekreden,
+                   CASE WHEN det.Gebeurtenis = 'Uit dienst' THEN fe.Einddatum
+                        ELSE fe.Startdatum END AS Gebeurtenis_Datum
             FROM dbo.fact_employment fe
             LEFT JOIN dbo.dim_event_type det ON det.EventType_Key = fe.EventType_Key
             LEFT JOIN dbo.dim_role r ON r.Role_Key = fe.Role_Key
             LEFT JOIN dbo.dim_departure_reason dr ON dr.DepartureReason_Key = fe.DepartureReason_Key
             WHERE fe.Employee_Key = ?
-            ORDER BY fe.Startdatum
+            ORDER BY Gebeurtenis_Datum
             """,
             (employee_key,),
         )

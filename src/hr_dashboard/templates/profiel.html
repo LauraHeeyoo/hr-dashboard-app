@@ -294,9 +294,10 @@ if (historyEvents.length || scoreTrend.length) {
     // own copy) — one shared set of year labels for both, not two.
     // Takes `field` explicitly rather than hardcoding it — the two panels
     // plot different datasets with different date column names
-    // (historyEvents' "Startdatum" vs. scoreTrend's "Snapshot_Date"), and
-    // an earlier version of this hardcoded "Startdatum" here even when
-    // called for the score panel, silently referencing a field that
+    // (historyEvents' "Gebeurtenis_Datum" vs. scoreTrend's
+    // "Snapshot_Date"), and an earlier version of this hardcoded
+    // "Startdatum" here even when called for the score panel, silently
+    // referencing a field that
     // doesn't exist on scoreTrend's rows — every one of its x-values came
     // out undefined, so the whole line/point layer had nothing valid to
     // draw (present in the DOM, but every path's `d` was null).
@@ -319,20 +320,35 @@ if (historyEvents.length || scoreTrend.length) {
                     data: { values: historyEvents },
                     mark: { type: "line", color: "#d8d8d8" },
                     encoding: {
-                        x: xEncoding("Startdatum", !scoreTrend.length),
+                        x: xEncoding("Gebeurtenis_Datum", !scoreTrend.length),
                         y: { field: "Salaris", type: "quantitative", title: "Salaris (€)" },
-                        order: { field: "Startdatum" }
+                        order: { field: "Gebeurtenis_Datum" }
                     }
                 },
                 {
                     data: { values: historyEvents },
                     mark: { type: "point", size: 45, filled: true },
                     encoding: {
-                        x: { field: "Startdatum", type: "temporal" },
+                        // Gebeurtenis_Datum, not Startdatum — every row's
+                        // Gebeurtenis describes what happened at that
+                        // stint's Startdatum EXCEPT "Uit dienst", which is
+                        // inherently a stint-ending event; its real date
+                        // is that row's Einddatum. Plotting all events at
+                        // Startdatum uniformly put a departure marker
+                        // roughly a year too early — confirmed against
+                        // dim_employee.Datum_uitdienst directly (Laura
+                        // caught this on Faas Giselmeyer: page showed
+                        // 2025-08-18, database had 2026-06-22 — his
+                        // "Uit dienst" row's Startdatum vs. its own
+                        // Einddatum). get_employee_history (profile.py)
+                        // now computes Gebeurtenis_Datum with that one
+                        // exception already applied, so nothing here needs
+                        // to know about it beyond just using this field.
+                        x: { field: "Gebeurtenis_Datum", type: "temporal" },
                         y: { field: "Salaris", type: "quantitative" },
                         color: { field: "Gebeurtenis", type: "nominal", title: "Gebeurtenis" },
                         tooltip: [
-                            { field: "Startdatum", title: "Datum", type: "temporal" },
+                            { field: "Gebeurtenis_Datum", title: "Datum", type: "temporal" },
                             { field: "Gebeurtenis", title: "Gebeurtenis" },
                             { field: "Functie_Naam", title: "Functie" },
                             { field: "Salaris", title: "Salaris (€)", format: ",.0f" },
@@ -344,7 +360,7 @@ if (historyEvents.length || scoreTrend.length) {
                     data: { values: historyEvents },
                     mark: { type: "text", dy: -14, fontSize: 10, color: "#1f2430" },
                     encoding: {
-                        x: { field: "Startdatum", type: "temporal" },
+                        x: { field: "Gebeurtenis_Datum", type: "temporal" },
                         y: { field: "Salaris", type: "quantitative" },
                         text: { field: "Gebeurtenis" }
                     }
