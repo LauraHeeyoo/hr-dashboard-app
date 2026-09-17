@@ -105,3 +105,37 @@ surfaced and fixed a latent bug this exposed: the three top KPIs used
 Jinja's implicit truthiness (`{% if kpis.x %}`) instead of `is not none`,
 so a genuine `0.0` result — now common for "onder benchmark" — rendered as
 "—" instead of "0.0%".
+
+## Profiel page
+
+### 6. Expand beyond the identity card, timeline, and AI summary
+
+The first slice shipped three things: a filter rail that narrows an
+employee-search picker, an identity/snapshot card, a career timeline, and
+an AI-generated summary paragraph. Laura's own proposal (before building)
+listed several more pieces, deliberately deferred rather than built all at
+once — "we can expand on the page later (with the 'Meer analyses' button
+possibly)":
+
+- **Trend charts**, not just snapshots — performance/engagement/
+  satisfaction/absence over the employee's last N reviews or months,
+  instead of only "the latest value." This was the single change Laura
+  singled out as the most valuable one over the old Power BI page.
+- **Peer-group comparison** instead of (or alongside) the org-wide average
+  the old page's KPI mini-charts used — "vs. their own department" or "vs.
+  people in the same role" is a fairer comparison than one company-wide
+  blend.
+- **A transparent "worth a conversation" panel** — a short, rule-based (not
+  a black-box score) list of things worth a manager's attention (e.g.
+  "compa-ratio below 90% for 8+ months"), explicitly *not* a numeric
+  "flight risk" score.
+- Possibly gated behind a collapsible "Meer analyses" section, the same
+  pattern salaris.html already uses for its own secondary charts
+  (`dashboard_base.html`'s expand/collapse convention), so the page doesn't
+  get overwhelming by default.
+
+Explicitly out of scope for now (also from that same proposal): a
+numeric flight-risk score, drilling into other employees from this page,
+and the qualification/diploma or safety-incident items the *old* Power BI
+project's own backlog had flagged (would need a data-availability check
+first — not confirmed to exist in this app's database yet).
