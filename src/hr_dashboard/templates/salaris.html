@@ -14,7 +14,7 @@
 {% endblock %}
 
 {% block tiles %}
-<div class="grid-stack-item" gs-id="filter-rail" gs-x="0" gs-y="0" gs-w="12" gs-h="3" gs-min-w="2">
+<div class="grid-stack-item" gs-id="filter-rail" gs-x="0" gs-y="0" gs-w="12" gs-h="2" gs-min-w="2">
     <aside class="grid-stack-item-content filter-rail">
         <span class="tile-grip"></span>
         <form method="get" action="/salaris" id="filter-form">
@@ -77,7 +77,7 @@
     </aside>
 </div>
 
-<div class="grid-stack-item" gs-id="kpi-aantal" gs-x="0" gs-y="3" gs-w="2" gs-h="3" gs-min-w="2">
+<div class="grid-stack-item" gs-id="kpi-aantal" gs-x="0" gs-y="2" gs-w="2" gs-h="3" gs-min-w="2">
     <div class="grid-stack-item-content kpi-card kpi-card-clickable">
         <span class="tile-grip"></span>
         <a href="{{ medewerkers_urls.alle }}">
@@ -87,7 +87,7 @@
     </div>
 </div>
 
-<div class="grid-stack-item" gs-id="kpi-mediaan" gs-x="2" gs-y="3" gs-w="2" gs-h="3" gs-min-w="2">
+<div class="grid-stack-item" gs-id="kpi-mediaan" gs-x="2" gs-y="2" gs-w="2" gs-h="3" gs-min-w="2">
     <div class="grid-stack-item-content kpi-card">
         <span class="tile-grip"></span>
         <div class="kpi-value" id="kpi-median-salaris">
@@ -97,7 +97,7 @@
     </div>
 </div>
 
-<div class="grid-stack-item" gs-id="kpi-loonsom" gs-x="4" gs-y="3" gs-w="2" gs-h="3" gs-min-w="2">
+<div class="grid-stack-item" gs-id="kpi-loonsom" gs-x="4" gs-y="2" gs-w="2" gs-h="3" gs-min-w="2">
     <div class="grid-stack-item-content kpi-card">
         <span class="tile-grip"></span>
         <div class="kpi-value" id="kpi-totale-loonsom">
@@ -112,7 +112,7 @@
     </div>
 </div>
 
-<div class="grid-stack-item" gs-id="kpi-benchmark-ratio" gs-x="6" gs-y="3" gs-w="2" gs-h="3" gs-min-w="2">
+<div class="grid-stack-item" gs-id="kpi-benchmark-ratio" gs-x="6" gs-y="2" gs-w="2" gs-h="3" gs-min-w="2">
     <div class="grid-stack-item-content kpi-card">
         <span class="tile-grip"></span>
         <div class="kpi-value">
@@ -127,7 +127,7 @@
     </div>
 </div>
 
-<div class="grid-stack-item" gs-id="kpi-onder-benchmark" gs-x="8" gs-y="3" gs-w="2" gs-h="3" gs-min-w="2">
+<div class="grid-stack-item" gs-id="kpi-onder-benchmark" gs-x="8" gs-y="2" gs-w="2" gs-h="3" gs-min-w="2">
     <div class="grid-stack-item-content kpi-card kpi-card-clickable">
         <span class="tile-grip"></span>
         <a href="{{ medewerkers_urls.onder_benchmark }}">
@@ -139,11 +139,11 @@
     </div>
 </div>
 
-<div class="grid-stack-item" gs-id="kpi-paygap" gs-x="10" gs-y="3" gs-w="2" gs-h="3" gs-min-w="2">
+<div class="grid-stack-item" gs-id="kpi-paygap" gs-x="10" gs-y="2" gs-w="2" gs-h="3" gs-min-w="2">
     <div class="grid-stack-item-content kpi-card">
         <span class="tile-grip"></span>
         <div class="kpi-value" id="kpi-gender-pay-gap">
-            {% if gender_pay_gap.gecorrigeerd_pct is not none %}{{ "{:.1f}".format(gender_pay_gap.gecorrigeerd_pct * 100) }}%{% else %}—{% endif %}
+            {% if gender_pay_gap.gecorrigeerd_pct is not none %}{{ "{:+.1f}".format(gender_pay_gap.gecorrigeerd_pct * 100) }}%{% else %}—{% endif %}
         </div>
         <div class="kpi-label">
             Gecorrigeerde loonkloof (m/v)
@@ -154,7 +154,7 @@
     </div>
 </div>
 
-<div class="grid-stack-item" gs-id="chart-distribution" gs-x="8" gs-y="19" gs-w="4" gs-h="6" gs-min-w="3">
+<div class="grid-stack-item" gs-id="chart-distribution" gs-x="8" gs-y="18" gs-w="4" gs-h="6" gs-min-w="3">
     <div class="grid-stack-item-content chart-card">
         <span class="tile-grip"></span>
         <h2>Spreiding salaris</h2>
@@ -162,7 +162,7 @@
     </div>
 </div>
 
-<div class="grid-stack-item" gs-id="chart-tenure" gs-x="4" gs-y="19" gs-w="4" gs-h="6" gs-min-w="3">
+<div class="grid-stack-item" gs-id="chart-tenure" gs-x="4" gs-y="18" gs-w="4" gs-h="6" gs-min-w="3">
     <div class="grid-stack-item-content chart-card">
         <span class="tile-grip"></span>
         <h2>Salaris versus dienstjaren</h2>
@@ -170,7 +170,7 @@
     </div>
 </div>
 
-<div class="grid-stack-item" gs-id="chart-comparatio" gs-x="4" gs-y="13" gs-w="4" gs-h="6" gs-min-w="3">
+<div class="grid-stack-item" gs-id="chart-comparatio" gs-x="4" gs-y="12" gs-w="4" gs-h="6" gs-min-w="3">
     <div class="grid-stack-item-content chart-card">
         <span class="tile-grip"></span>
         <h2>
@@ -183,7 +183,7 @@
     </div>
 </div>
 
-<div class="grid-stack-item" gs-id="chart-headcount" gs-x="8" gs-y="13" gs-w="4" gs-h="6" gs-min-w="3">
+<div class="grid-stack-item" gs-id="chart-headcount" gs-x="8" gs-y="12" gs-w="4" gs-h="6" gs-min-w="3">
     <div class="grid-stack-item-content chart-card">
         <span class="tile-grip"></span>
         <div class="dimension-switcher">
@@ -205,7 +205,7 @@
     </div>
 </div>
 
-<div class="grid-stack-item" gs-id="chart-benchmark" gs-x="0" gs-y="13" gs-w="4" gs-h="6" gs-min-w="3">
+<div class="grid-stack-item" gs-id="chart-benchmark" gs-x="0" gs-y="12" gs-w="4" gs-h="6" gs-min-w="3">
     <div class="grid-stack-item-content chart-card">
         <span class="tile-grip"></span>
         <div class="dimension-switcher">
@@ -232,7 +232,7 @@
     </div>
 </div>
 
-<div class="grid-stack-item" gs-id="chart-new-hire" gs-x="0" gs-y="19" gs-w="4" gs-h="6" gs-min-w="3">
+<div class="grid-stack-item" gs-id="chart-new-hire" gs-x="0" gs-y="18" gs-w="4" gs-h="6" gs-min-w="3">
     <div class="grid-stack-item-content chart-card">
         <span class="tile-grip"></span>
         <div class="dimension-switcher">
@@ -259,7 +259,7 @@
     </div>
 </div>
 
-<div class="grid-stack-item" gs-id="chart-lfl" gs-x="6" gs-y="6" gs-w="6" gs-h="7" gs-min-w="3">
+<div class="grid-stack-item" gs-id="chart-lfl" gs-x="6" gs-y="5" gs-w="6" gs-h="7" gs-min-w="3">
     <div class="grid-stack-item-content chart-card">
         <span class="tile-grip"></span>
         <div class="lfl-header">
@@ -288,7 +288,7 @@
     </div>
 </div>
 
-<div class="grid-stack-item" gs-id="chat" gs-x="0" gs-y="6" gs-w="6" gs-h="7" gs-min-w="5">
+<div class="grid-stack-item" gs-id="chat" gs-x="0" gs-y="5" gs-w="6" gs-h="7" gs-min-w="5">
     <div class="grid-stack-item-content chart-card">
         <span class="tile-grip"></span>
         <h2>Vraag het aan de data</h2>
@@ -452,8 +452,6 @@ function matchesHighlight(row, hl) {
 // slecht kan onderscheiden.
 const KPI_GOOD = "#59b88c";
 const KPI_BAD = "#b5332e";
-const KPI_MANNEN = "#2a78d6";
-const KPI_VROUWEN = "#c2679a";
 
 function mixHex(hexA, hexB, t) {
     const clamped = Math.min(Math.max(t, 0), 1);
@@ -507,6 +505,15 @@ function applyOnderBenchmarkStyle(fraction) {
 // De loonkloof-KPI recomputet nooit op highlight (zie de docstring
 // hierboven) — dus deze hoeft maar één keer, bij het laden, aangeroepen te
 // worden, met de server-berekende waarde.
+// Een blauw/roze (mannen/vrouwen) kleurpaar suggereerde hier onbedoeld
+// een oordeel — alsof de ene richting "prima" (koel, blauw) was en de
+// andere richting alarmerender (Laura). Elke afwijking van 0% is evenveel
+// een aandachtspunt, welke kant dan ook op, dus dit is nu gewoon dezelfde
+// rode "wijkt af van de gewenste situatie"-kleur als de twee benchmark-
+// KPI's hierboven — alleen de MATE van afwijking bepaalt de intensiteit,
+// niet de richting. De richting zelf staat nog steeds in het getal zelf
+// (het + of - teken, zie salaris_page in pages.py/de tojson hierboven)
+// en in de tooltip.
 const PAYGAP_DEAD_ZONE = 0.005;
 const PAYGAP_CAP = 0.10;
 function applyPaygapStyle(pct) {
@@ -516,7 +523,7 @@ function applyPaygapStyle(pct) {
         return;
     }
     const t = (Math.abs(pct) - PAYGAP_DEAD_ZONE) / (PAYGAP_CAP - PAYGAP_DEAD_ZONE);
-    card.style.backgroundColor = mixHex("#ffffff", pct > 0 ? KPI_MANNEN : KPI_VROUWEN, t);
+    card.style.backgroundColor = mixHex("#ffffff", KPI_BAD, t);
 }
 
 // Server-berekende startwaarden — ook wat updateKpisForHighlight() teruggeeft
