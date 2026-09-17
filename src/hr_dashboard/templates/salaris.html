@@ -296,18 +296,42 @@ const dimensionColumns = {{ dimension_columns_json | safe }};
 // row, so this check works regardless of which of the three switchers
 // produced the highlight. `field` can also be "Employee_Key" (Salaris
 // versus dienstjaren emits this — one dot already IS one specific
-// employee, no aggregation to fall back to) — the three dimension-grouped
-// charts correctly ignore it, since Employee_Key never equals any of
-// their own grouping columns. `rangeField`/rangeMin/rangeMax (compa-ratio)
-// is the same idea as colorField but for a bar that represents a BAND of
-// a continuous value instead of one discrete category.
+// employee, no aggregation to fall back to). `rangeField`/rangeMin/
+// rangeMax (compa-ratio) is the same idea as colorField but for a bar
+// that represents a BAND of a continuous value instead of one discrete
+// category.
+//
+// A raw per-employee chart (Spreiding salaris, Salaris versus dienstjaren,
+// compa-ratio) carries every real column on every row, so `hl` alone is
+// enough for it to match itself directly (see RAW_MATCH_EXPR below). The
+// three dimension-grouped charts (Aantal medewerkers, Verdeling t.o.v.
+// benchmark, Startsalaris versus huidig) are different: their rows are
+// already pre-aggregated server-side down to just their own currently-
+// selected dimension (as the generic "dimension_value" alias) plus, for
+// two of them, one stacking category column — so a highlight expressed
+// via a field they don't carry (Employee_Key, a compa-ratio range, or a
+// colorField that isn't literally their own category column) can't be
+// checked against their own rows at all. For those, every highlight
+// change also recomputes an `hlKeys` signal per grouped chart: which of
+// THAT chart's own (dimension_value[, category]) combinations contain at
+// least one employee matching the current highlight, found by filtering
+// the full per-employee `employeeRows` with the exact same
+// `matchesHighlight()` already used for the KPI recompute below. This is
+// a client-side lookup, not a SQL one, on purpose — employeeRows already
+// carries every real column for every employee, so there's nothing a new
+// query or view would tell us that a plain JS filter can't (Laura: "het
+// is toch juist allemaal uiteindelijk te herleiden naar individuele
+// employees?" — yes, and employeeRows already has that granularity).
+// See `computeGroupKeys`/`groupedKeyExpr` below for the two matching
+// halves (JS side computes the keys, the Vega expression checks
+// membership) and the `groupBy` option `wireHighlight` takes for it.
 //
 // This whole mechanism (and _vegaView, read by dashboard_base.html's
 // shared resize observer) is specific to this page — a page with just one
 // or two independent charts (like the medewerkers detail table has none)
 // doesn't need any of this.
 let currentHighlight = null;
-const highlightViews = [];
+const highlightViews = []; // [{ view, groupBy: {ownField, categoryField} | null }]
 
 function sameHighlight(a, b) {
     if (a === b) return true;
@@ -317,10 +341,30 @@ function sameHighlight(a, b) {
         && a.rangeField === b.rangeField && a.rangeMin === b.rangeMin && a.rangeMax === b.rangeMax;
 }
 
+// See the big comment above `currentHighlight`: this is the JS half of
+// letting a dimension-grouped chart react to a highlight it has no
+// column for at all. `ownField`/`categoryField` describe THIS chart's own
+// (dimension, category) shape (categoryField is null for new-hire, which
+// isn't split by category); the returned array is every distinct
+// "dimensionValue" or "dimensionValue||categoryValue" combination that
+// contains at least one matching employee.
+function computeGroupKeys(hl, ownField, categoryField) {
+    if (!hl) return [];
+    const keys = new Set();
+    for (const row of employeeRows) {
+        if (!matchesHighlight(row, hl)) continue;
+        keys.add(categoryField ? `${row[ownField]}||${row[categoryField]}` : String(row[ownField]));
+    }
+    return [...keys];
+}
+
 function setHighlight(next) {
     currentHighlight = sameHighlight(currentHighlight, next) ? null : next;
-    highlightViews.forEach((view) => {
+    highlightViews.forEach(({ view, groupBy }) => {
         view.signal("hl", currentHighlight);
+        if (groupBy) {
+            view.signal("hlKeys", computeGroupKeys(currentHighlight, groupBy.ownField, groupBy.categoryField));
+        }
         view.runAsync();
     });
     updateKpisForHighlight();
@@ -347,9 +391,9 @@ function findBinRange(datum, rangeField) {
     return { start: datum[startKey], end: datum[endKey] };
 }
 
-function wireHighlight(viewPromise, elementId, { field, colorField, rangeField } = {}) {
+function wireHighlight(viewPromise, elementId, { field, colorField, rangeField, groupBy } = {}) {
     viewPromise.then((result) => {
-        highlightViews.push(result.view);
+        highlightViews.push({ view: result.view, groupBy: groupBy || null });
         document.getElementById(elementId)._vegaView = result.view;
         result.view.addEventListener("click", (event, item) => {
             if (!item || !item.datum) {
@@ -628,8 +672,9 @@ function rankExpr(field, order) {
 // Every raw per-employee row carries every real column, including
 // Compa_Ratio_Interne_Schaal (null for anyone without a scale — null
 // never satisfies a >= / < range check either, so they correctly never
-// match a compa-ratio range highlight), so no "field missing" guard is
-// needed here the way groupedMatchExpr below needs one.
+// match a compa-ratio range highlight), so this can check hl directly —
+// unlike the grouped charts below, which don't carry these columns at
+// all and go through an `hlKeys` lookup against employeeRows instead.
 const RAW_MATCH_EXPR =
     "hl == null || ((hl.field == null || datum[hl.field] === hl.value) && " +
     "(hl.colorField == null || datum[hl.colorField] === hl.colorVal) && " +
@@ -637,34 +682,25 @@ const RAW_MATCH_EXPR =
 
 // For a chart grouped server-side by ITS OWN currently selected dimension
 // (headcount/benchmark/new-hire): its rows only carry a generic
-// "dimension_value" alias, not the real column name, so a highlight only
-// applies to this chart's own dimVal-check when the highlight's field
-// equals this chart's own real grouping column (`ownField`) — a highlight
-// from an unrelated dimension (e.g. this chart is grouped by Functie but
-// the highlight is about Afdeling) simply doesn't dim/light anything here,
-// same as how unrelated fields don't cross-filter each other in Power BI.
-//
-// The colorField/rangeField clauses need an extra !isValid(...) guard
-// that RAW_MATCH_EXPR doesn't: a grouped chart's rows don't necessarily
-// carry every color/range field every OTHER chart might highlight by
-// (e.g. Startsalaris versus huidig salaris has neither Salaris_Categorie
-// nor Benchmark_Status at all) — without the guard, `datum[hl.colorField]`
-// on a row that doesn't have that key at all is undefined, which never
-// equals a real colorVal, so EVERY row would silently fail to match and
-// the whole chart would dim, even though the highlight has nothing to do
-// with this chart. isValid(...) tells "field absent" (this doesn't apply
-// to me, stay visible) apart from "field present but a different value"
-// (this genuinely doesn't match, dim it) — the same "unrelated dimension
-// doesn't touch this chart" courtesy dimClause already gives `field`,
-// extended to colorField/rangeField too (Laura: Startsalaris versus
-// huidig salaris was going fully dim on any unrelated category click).
-function groupedMatchExpr(ownField) {
-    const dimClause = `(hl.field == null || hl.field !== '${ownField}' || datum.dimension_value === hl.value)`;
-    const colorClause = "(hl.colorField == null || !isValid(datum[hl.colorField]) || datum[hl.colorField] === hl.colorVal)";
-    const rangeClause = "(hl.rangeField == null || !isValid(datum[hl.rangeField]) || " +
-        "(datum[hl.rangeField] >= hl.rangeMin && datum[hl.rangeField] < hl.rangeMax))";
-    return `hl == null || (${dimClause} && ${colorClause} && ${rangeClause})`;
+// "dimension_value" alias (plus, for headcount/benchmark, one literal
+// stacking-category column), never the full set of real employee columns
+// — so this can't check hl.field/colorField/rangeField against its own
+// row directly the way RAW_MATCH_EXPR does. Instead it checks membership
+// in `hlKeys`, a signal the JS side (computeGroupKeys/setHighlight above)
+// recomputes on every highlight change specifically for THIS chart's own
+// (dimension_value[, category]) shape — see the big comment above
+// `currentHighlight` for why. `groupedKeyExpr` builds the same
+// "dimensionValue[||categoryValue]" key on the Vega side so the two line
+// up; `GROUPED_MATCH_EXPR` is the same tiny membership check for every
+// grouped chart regardless of its own field/category, since all the
+// real work already happened in `hlKeys`.
+function groupedKeyExpr(categoryField) {
+    return categoryField
+        ? `datum.dimension_value + '||' + datum['${categoryField}']`
+        : "datum.dimension_value";
 }
+const GROUPED_MATCH_EXPR = "hl == null || indexof(hlKeys, datum._seg_key) >= 0";
+const GROUP_KEYS_PARAM = [{ name: "hlKeys", value: [] }];
 
 wireHighlight(
     vegaEmbed("#chart-distribution", {
@@ -722,9 +758,10 @@ wireHighlight(
         width: "container", height: { step: 22 },
         autosize: { type: "fit", contains: "padding" },
         data: { values: headcountByDimensionData },
-        params: HIGHLIGHT_PARAM,
+        params: [...HIGHLIGHT_PARAM, ...GROUP_KEYS_PARAM],
         transform: [
-            { calculate: groupedMatchExpr(headcountOwnField), as: "matches_highlight" },
+            { calculate: groupedKeyExpr("Salaris_Categorie"), as: "_seg_key" },
+            { calculate: GROUPED_MATCH_EXPR, as: "matches_highlight" },
             {
                 aggregate: [{ op: "sum", field: "aantal", as: "total" }],
                 groupby: ["dimension_value", "Salaris_Categorie", "matches_highlight"]
@@ -747,7 +784,10 @@ wireHighlight(
         config: baseConfig
     }, { actions: false }),
     "chart-headcount",
-    { field: headcountOwnField, colorField: "Salaris_Categorie" }
+    {
+        field: headcountOwnField, colorField: "Salaris_Categorie",
+        groupBy: { ownField: headcountOwnField, categoryField: "Salaris_Categorie" }
+    }
 );
 
 const benchmarkOwnField = dimensionColumns["{{ dim_benchmark }}"];
@@ -759,9 +799,10 @@ wireHighlight(
         width: "container", height: { step: 22 },
         autosize: { type: "fit", contains: "padding" },
         data: { values: benchmarkByDimensionData },
-        params: HIGHLIGHT_PARAM,
+        params: [...HIGHLIGHT_PARAM, ...GROUP_KEYS_PARAM],
         transform: [
-            { calculate: groupedMatchExpr(benchmarkOwnField), as: "matches_highlight" },
+            { calculate: groupedKeyExpr("Benchmark_Status"), as: "_seg_key" },
+            { calculate: GROUPED_MATCH_EXPR, as: "matches_highlight" },
             {
                 aggregate: [{ op: "sum", field: "aantal", as: "total" }],
                 groupby: ["dimension_value", "Benchmark_Status", "matches_highlight"]
@@ -805,7 +846,10 @@ wireHighlight(
         config: baseConfig
     }, { actions: false }),
     "chart-benchmark",
-    { field: benchmarkOwnField, colorField: "Benchmark_Status" }
+    {
+        field: benchmarkOwnField, colorField: "Benchmark_Status",
+        groupBy: { ownField: benchmarkOwnField, categoryField: "Benchmark_Status" }
+    }
 );
 
 // --- Salaris versus dienstjaren: a plain scatter (one point per employee)
@@ -921,8 +965,11 @@ wireHighlight(
 // (get_new_hire_vs_current), same shape as chart-headcount/chart-benchmark
 // — so it wires into the highlight mechanism the same way they do, both
 // emitting (click a bar here to highlight that group everywhere else) and
-// reacting (a highlight from headcount/benchmark whose field matches this
-// chart's own dimension dims this chart too).
+// reacting (any highlight, from any chart, dims this chart too wherever
+// it applies — via groupBy/hlKeys, see the comment above
+// `currentHighlight`). No categoryField here (unlike headcount/benchmark):
+// both bars in a pair are the same group of employees at two points in
+// time, not two different sub-populations to distinguish.
 const newHireOwnField = dimensionColumns["{{ dim_new_hire }}"];
 wireHighlight(
     vegaEmbed("#chart-new-hire", {
@@ -933,9 +980,10 @@ wireHighlight(
         width: "container", height: { step: 26 },
         autosize: { type: "fit", contains: "padding" },
         data: { values: newHireVsCurrentData },
-        params: HIGHLIGHT_PARAM,
+        params: [...HIGHLIGHT_PARAM, ...GROUP_KEYS_PARAM],
         transform: [
-            { calculate: groupedMatchExpr(newHireOwnField), as: "matches_highlight" },
+            { calculate: groupedKeyExpr(null), as: "_seg_key" },
+            { calculate: GROUPED_MATCH_EXPR, as: "matches_highlight" },
             { fold: ["gem_start_salaris", "gem_huidig_salaris"], as: ["Salaris_Type", "Bedrag"] }
         ],
         mark: { type: "bar", cursor: "pointer" },
@@ -966,7 +1014,7 @@ wireHighlight(
         config: baseConfig
     }, { actions: false }),
     "chart-new-hire",
-    { field: newHireOwnField }
+    { field: newHireOwnField, groupBy: { ownField: newHireOwnField, categoryField: null } }
 );
 
 // --- LFL trend: Maand/Jaar granularity + a range slider, both entirely
