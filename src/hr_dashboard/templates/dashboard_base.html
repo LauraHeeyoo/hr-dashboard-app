@@ -515,6 +515,111 @@ document.querySelectorAll(".chart-scroll > .chart-canvas[data-fixed-row-height]"
     applyState();
 });
 
+// --- Sortable / searchable data tables -----------------------------------
+// Any <table class="data-table"> gets this for free — the same "just add
+// the class" contract as .chart-canvas/.filter-rail/.tooltip-icon above,
+// so a future page's own employee table (Verzuim, etc.) needs no extra
+// per-page JS. A <th> opts into sorting via data-sort="text" or
+// data-sort="number"; a numeric column also needs data-value on each
+// <td> (the displayed text is formatted — "€43.804", "64%" — and can't be
+// parsed back reliably, so the raw comparable number is carried
+// separately). A column whose natural order isn't alphabetical/numerical
+// (e.g. "Performance"'s "< 3.0"/"3.0 - 3.5"/... bins, or "Tevredenheid"'s
+// Laag/Neutraal/Hoog labels) instead gets data-sort-order="A,B,C,..." on
+// its <th>, ranking each cell by position in that list. A missing/blank
+// value (data-value="" or a value not found in data-sort-order) always
+// sorts last, regardless of direction — the usual spreadsheet convention.
+document.querySelectorAll("table.data-table").forEach((table) => {
+    const thead = table.tHead;
+    const tbody = table.tBodies[0];
+    if (!thead || !tbody) return;
+
+    const searchInput = document.createElement("input");
+    searchInput.type = "search";
+    searchInput.className = "data-table-search";
+    searchInput.placeholder = "Zoeken in tabel…";
+    table.parentElement.insertBefore(searchInput, table);
+
+    function dataRows() {
+        return [...tbody.rows].filter((row) => !row.classList.contains("data-table-empty-row"));
+    }
+
+    function applySearch() {
+        const term = searchInput.value.trim().toLowerCase();
+        let anyVisible = false;
+        dataRows().forEach((row) => {
+            const match = !term || row.textContent.toLowerCase().includes(term);
+            row.style.display = match ? "" : "none";
+            if (match) anyVisible = true;
+        });
+        let noMatchRow = tbody.querySelector(".data-table-no-match-row");
+        if (!anyVisible && dataRows().length) {
+            if (!noMatchRow) {
+                noMatchRow = document.createElement("tr");
+                noMatchRow.className = "data-table-empty-row data-table-no-match-row";
+                const cell = document.createElement("td");
+                cell.colSpan = thead.rows[0].cells.length;
+                cell.textContent = "Geen resultaten voor deze zoekopdracht.";
+                noMatchRow.appendChild(cell);
+                tbody.appendChild(noMatchRow);
+            }
+            noMatchRow.style.display = "";
+        } else if (noMatchRow) {
+            noMatchRow.style.display = "none";
+        }
+    }
+    searchInput.addEventListener("input", applySearch);
+
+    function cellSortValue(td, type, order) {
+        if (order) {
+            const idx = order.indexOf(td.textContent.trim());
+            return idx === -1 ? null : idx;
+        }
+        if (type === "number") {
+            const raw = td.dataset.value;
+            return raw === undefined || raw === "" ? null : parseFloat(raw);
+        }
+        return td.textContent.trim().toLowerCase();
+    }
+
+    let sortState = { th: null, dir: 1 };
+
+    [...thead.rows[0].cells].forEach((th, colIndex) => {
+        const type = th.dataset.sort;
+        if (!type) return;
+        const order = th.dataset.sortOrder ? th.dataset.sortOrder.split(",") : null;
+        th.classList.add("sortable");
+        const indicator = document.createElement("span");
+        indicator.className = "sort-indicator";
+        th.appendChild(indicator);
+
+        th.addEventListener("click", () => {
+            const dir = sortState.th === th ? -sortState.dir : 1;
+            sortState = { th, dir };
+            [...thead.rows[0].cells].forEach((otherTh) => {
+                const otherIndicator = otherTh.querySelector(".sort-indicator");
+                if (otherIndicator) otherIndicator.textContent = otherTh === th ? (dir === 1 ? " ▲" : " ▼") : "";
+            });
+
+            const rows = dataRows();
+            rows.sort((rowA, rowB) => {
+                const a = cellSortValue(rowA.cells[colIndex], type, order);
+                const b = cellSortValue(rowB.cells[colIndex], type, order);
+                if (a === null && b === null) return 0;
+                if (a === null) return 1;
+                if (b === null) return -1;
+                if (a < b) return -dir;
+                if (a > b) return dir;
+                return 0;
+            });
+            rows.forEach((row) => tbody.appendChild(row));
+            // Whichever "empty" row applies (no data at all, or no search
+            // match) always belongs visually at the end, after sorting.
+            tbody.querySelectorAll(".data-table-empty-row").forEach((row) => tbody.appendChild(row));
+        });
+    });
+});
+
 document.getElementById("reset-layout-btn").addEventListener("click", () => {
     try {
         localStorage.removeItem(LAYOUT_STORAGE_KEY);
