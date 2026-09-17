@@ -25,9 +25,10 @@ def profiel_samenvatting(
     identity = profile.get_employee_identity(employee_key)
     history = profile.get_employee_history(employee_key)
     hr_context = profile.get_employee_hr_context(employee_key)
+    score_trend = profile.get_employee_score_trend(employee_key)
 
     try:
-        summary = generate_employee_summary(snapshot, identity, history, hr_context)
+        summary = generate_employee_summary(snapshot, identity, history, hr_context, score_trend)
     except Exception as exc:
         return {"summary": None, "error": f"Kon geen samenvatting genereren ({exc})."}
 

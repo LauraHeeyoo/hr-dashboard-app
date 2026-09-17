@@ -508,7 +508,18 @@ summaryBtn.addEventListener("click", async () => {
     try {
         const res = await fetch(`/profiel/samenvatting?employee_key=${employeeKey}&as_of=${peildatum}`);
         const data = await res.json();
-        summaryResult.textContent = data.summary || data.error || "Geen samenvatting beschikbaar.";
+        if (data.summary && data.summary.length) {
+            const list = document.createElement("ul");
+            list.className = "profile-signals-list";
+            for (const bullet of data.summary) {
+                const item = document.createElement("li");
+                item.textContent = bullet;
+                list.appendChild(item);
+            }
+            summaryResult.replaceChildren(list);
+        } else {
+            summaryResult.textContent = data.error || "Geen samenvatting beschikbaar.";
+        }
     } catch (e) {
         summaryResult.textContent = "Kon geen samenvatting genereren.";
     } finally {

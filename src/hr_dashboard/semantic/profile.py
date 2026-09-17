@@ -266,18 +266,17 @@ def get_employee_score_trend(employee_key: int) -> list[dict]:
             (employee_key,),
         )
         rows = rows_as_dicts(cur)
-        # TEMPORARY (Laura, 2026-09-17): Prestatie_Score is still ~0-5 in
-        # the live data while Tevredenheid_Score/Betrokkenheid_Score are
-        # already ~0-10 (confirmed live) — she's updating the data
-        # generator to put all three on one shared 0-10 scale, but wants
-        # the chart to already look right before that lands, so this
-        # doubles Prestatie_Score as a stand-in. REVERT this loop (just
-        # return `rows` directly) once the generator itself produces an
-        # already-unified scale — leaving this in afterwards would double
-        # an already-correct value. get_peer_group_averages below has the
-        # exact same doubling, for the exact same reason — revert both
-        # together, or the peer comparison bars go wrong instead of just
-        # the trend chart's own scale.
+        # DELIBERATE, PERMANENT (Laura, 2026-09-17/18): Prestatie_Score is
+        # still ~0-5 in the live data while Tevredenheid_Score/
+        # Betrokkenheid_Score are already ~0-10 (confirmed live).
+        # Prestatie_Score and Kandidaat_Kwaliteit (get_employee_hr_context)
+        # both feed many other parts of the data-simulation engine, so
+        # unifying the scale in the generator itself would ripple through
+        # the whole project — Laura decided it's simpler to keep this
+        # scaling here in app-logic instead, permanently, rather than a
+        # stopgap pending a generator change. get_peer_group_averages below
+        # has the exact same doubling, for the exact same reason — keep
+        # both in sync if this ever changes.
         for row in rows:
             if row["Prestatie_Score"] is not None:
                 row["Prestatie_Score"] = row["Prestatie_Score"] * 2
@@ -417,11 +416,11 @@ def get_peer_group_averages(employee_key: int, afdeling: str, as_of_date: date) 
         row = cur.fetchone()
         columns = [c[0] for c in cur.description]
         result = dict(zip(columns, row))
-        # Same TEMPORARY doubling as get_employee_score_trend's own
-        # Prestatie_Score, and for the same reason — comparing this
+        # Same deliberate, permanent doubling as get_employee_score_trend's
+        # own Prestatie_Score, and for the same reason — comparing this
         # employee's (already doubled) score against a peer average that
         # wasn't would make the comparison meaningless, not just
-        # inconsistent styling. Revert together with that other one.
+        # inconsistent styling. Keep both in sync if this ever changes.
         if result["Prestatie_Score"] is not None:
             result["Prestatie_Score"] = result["Prestatie_Score"] * 2
         return result
@@ -485,4 +484,12 @@ def get_employee_hr_context(employee_key: int) -> dict:
         else:
             context["Kandidaat_Kwaliteit"] = None
             context["Bron_Naam"] = None
+
+        # Same deliberate, permanent 0-5 -> 0-10 doubling as
+        # Prestatie_Score (see get_employee_score_trend) — Kandidaat_
+        # Kwaliteit is still ~0-5 in the live data, and feeds the same
+        # data-simulation engine elsewhere, so it gets the same app-side
+        # scaling rather than a generator change.
+        if context["Kandidaat_Kwaliteit"] is not None:
+            context["Kandidaat_Kwaliteit"] = context["Kandidaat_Kwaliteit"] * 2
         return context
