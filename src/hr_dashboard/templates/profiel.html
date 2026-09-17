@@ -290,7 +290,16 @@ if (historyEvents.length || scoreTrend.length) {
         layer: layers,
         resolve: { scale: { y: "independent", color: "independent" } },
         config: { view: { stroke: null } }
-    }, { actions: false });
+    }, { actions: false }).then((result) => {
+        // The one thing dashboard_base.html's shared chart-resize
+        // observer needs to make this chart track its tile's size
+        // (dashboard_base.html's own docstring: "the page's own script
+        // must stash the view onto that same element as
+        // el._vegaView = result.view") — every OTHER chart in this app
+        // already does this; missed here when "Loopbaan" was first built,
+        // which is exactly why shrinking the tile didn't shrink the chart.
+        document.getElementById("chart-timeline")._vegaView = result.view;
+    });
 }
 
 // AI-samenvatting: a plain fetch-on-click, not part of any highlight/chart

@@ -221,12 +221,7 @@ def get_employee_score_trend(employee_key: int) -> list[dict]:
     fact_workforce_snapshot data (roughly monthly), a different grain from
     get_employee_history's fact_employment career events. "Loopbaan" layers
     this on a second Y-axis alongside the (sparser) salary/event points,
-    sharing only the time axis, not the row grain. Laura: Prestatie_Score
-    is currently ~0-5 while Tevredenheid_Score/Betrokkenheid_Score are
-    ~0-10 (confirmed live), and she's updating the data generator to put
-    all three on the same 0-10 scale — nothing here assumes that's already
-    done (no hardcoded scale/domain), so the chart will pick up the
-    unified scale automatically once that lands, no code change needed."""
+    sharing only the time axis, not the row grain."""
     with get_connection() as conn:
         cur = conn.cursor()
         cur.execute(
@@ -238,4 +233,17 @@ def get_employee_score_trend(employee_key: int) -> list[dict]:
             """,
             (employee_key,),
         )
-        return rows_as_dicts(cur)
+        rows = rows_as_dicts(cur)
+        # TEMPORARY (Laura, 2026-09-17): Prestatie_Score is still ~0-5 in
+        # the live data while Tevredenheid_Score/Betrokkenheid_Score are
+        # already ~0-10 (confirmed live) — she's updating the data
+        # generator to put all three on one shared 0-10 scale, but wants
+        # the chart to already look right before that lands, so this
+        # doubles Prestatie_Score as a stand-in. REVERT this loop (just
+        # return `rows` directly) once the generator itself produces an
+        # already-unified scale — leaving this in afterwards would double
+        # an already-correct value.
+        for row in rows:
+            if row["Prestatie_Score"] is not None:
+                row["Prestatie_Score"] = row["Prestatie_Score"] * 2
+        return rows
