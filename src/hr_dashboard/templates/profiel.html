@@ -136,11 +136,13 @@
     </div>
 </div>
 
-<div class="grid-stack-item" gs-id="profile-timeline" gs-x="0" gs-y="10" gs-w="12" gs-h="5" gs-min-w="4">
+<div class="grid-stack-item" gs-id="profile-timeline" gs-x="0" gs-y="10" gs-w="12" gs-h="8" gs-min-w="4">
     <div class="grid-stack-item-content chart-card">
         <span class="tile-grip"></span>
         <h2>Loopbaan</h2>
-        <div id="chart-timeline" class="chart-canvas"></div>
+        <div class="chart-scroll">
+            <div id="chart-timeline" class="chart-canvas" data-fixed-row-height></div>
+        </div>
     </div>
 </div>
 {% else %}
@@ -165,16 +167,13 @@ const historyEvents = {{ history_json | safe }};
 const scoreTrend = {{ score_trend_json | safe }};
 
 if (historyEvents.length || scoreTrend.length) {
-    // Salaris on the Y axis, not a flat "everything at 0" line — a plain
-    // horizontal row of dots showed WHEN something happened but nothing
-    // about what actually changed (Laura: "I don't really see the value
-    // of the type of chart we're using"). Every event already carries the
-    // salary that took effect from that date, so plotting it directly
-    // turns this into an actual salary-growth trajectory, colored by what
-    // kind of event caused each change — genuinely informative, not just
-    // decorative, and a single-event employee still shows something
-    // meaningful (their starting salary as one point) instead of a lone
-    // dot with no information in it at all.
+    // Two STACKED charts sharing only the time axis, not one chart with
+    // two Y-axes. A dual-axis version of this was built first, but Laura
+    // flagged it as hard to read — a well-known problem with dual-axis
+    // charts generally (two independently-scaled lines drawn on top of
+    // each other invite reading a correlation into them that isn't
+    // actually there, since either axis's scale is a free choice). Each
+    // panel below keeps its own single, honest Y-axis instead.
     //
     // The x-axis needs an explicit tickCount/format: Vega-Lite's default
     // temporal-axis granularity is chosen from the data's own time SPAN,
@@ -183,27 +182,28 @@ if (historyEvents.length || scoreTrend.length) {
     // coarseness preference. `scale: {nice: "year"}` also nudges the
     // domain to whole-year boundaries, which helps this same case further
     // (a single point no longer sits in a domain of literally zero width).
-    const xEncoding = {
-        field: "Startdatum", type: "temporal", title: null,
-        scale: { nice: "year" },
-        axis: { format: "%Y", tickCount: { interval: "year", step: 1 }, grid: false }
-    };
-    // `resolve: {scale: {y: "independent"}}` below applies to whatever's
-    // directly inside the top-level `layer` array — so the 3 salary
-    // sub-layers (line/points/text) are nested into ONE group here, to
-    // keep sharing a single merged axis the way they did before the score
-    // layer was added. Without this nesting, "independent" would apply to
-    // ALL of them individually instead of just the two axis GROUPS
-    // (salary vs. score), drawing 3 duplicate "Salaris" axes.
-    const layers = [];
+    // Only the BOTTOM panel gets this axis drawn (the top one hides its
+    // own copy) — one shared set of year labels for both, not two.
+    function xEncoding(showAxis) {
+        return {
+            field: "Startdatum", type: "temporal", title: null,
+            scale: { nice: "year" },
+            axis: showAxis
+                ? { format: "%Y", tickCount: { interval: "year", step: 1 }, grid: false }
+                : null
+        };
+    }
+
+    const views = [];
     if (historyEvents.length) {
-        layers.push({
+        views.push({
+            height: 140,
             layer: [
                 {
                     data: { values: historyEvents },
                     mark: { type: "line", color: "#d8d8d8" },
                     encoding: {
-                        x: xEncoding,
+                        x: xEncoding(!scoreTrend.length),
                         y: { field: "Salaris", type: "quantitative", title: "Salaris (€)" },
                         order: { field: "Startdatum" }
                     }
@@ -237,8 +237,8 @@ if (historyEvents.length || scoreTrend.length) {
         });
     }
 
-    // Performance/tevredenheid/betrokkenheid on a second, independent Y
-    // axis (right side) — periodic fact_workforce_snapshot data (see
+    // Performance/tevredenheid/betrokkenheid, its own panel below the
+    // salary one — periodic fact_workforce_snapshot data (see
     // get_employee_score_trend), a different grain from the sparse career
     // events above, sharing only the time axis, not the row grain.
     // Deliberately no hardcoded score domain: Laura is still unifying
@@ -247,7 +247,8 @@ if (historyEvents.length || scoreTrend.length) {
     // — leaving the scale to fit whatever the data actually is keeps this
     // correct before and after that change, no code update needed either way.
     if (scoreTrend.length) {
-        layers.push({
+        views.push({
+            height: 110,
             data: { values: scoreTrend },
             transform: [
                 {
@@ -257,10 +258,10 @@ if (historyEvents.length || scoreTrend.length) {
             ],
             mark: { type: "line", point: { size: 25 }, opacity: 0.85, interpolate: "monotone" },
             encoding: {
-                x: { field: "Snapshot_Date", type: "temporal" },
+                x: xEncoding(true),
                 y: {
                     field: "Score_Waarde", type: "quantitative", title: "Score",
-                    scale: { zero: true }, axis: { orient: "right", grid: false }
+                    scale: { zero: true }, axis: { grid: false }
                 },
                 color: {
                     field: "Score_Type", type: "nominal", title: "Score",
@@ -285,19 +286,25 @@ if (historyEvents.length || scoreTrend.length) {
 
     vegaEmbed("#chart-timeline", {
         $schema: "https://vega.github.io/schema/vega-lite/v6.json",
-        width: "container", height: "container",
-        autosize: { type: "fit", contains: "padding" },
-        layer: layers,
-        resolve: { scale: { y: "independent", color: "independent" } },
+        width: "container",
+        autosize: { type: "fit-x", contains: "padding" },
+        vconcat: views,
+        spacing: 4,
+        resolve: { scale: { x: "shared" } },
         config: { view: { stroke: null } }
     }, { actions: false }).then((result) => {
         // The one thing dashboard_base.html's shared chart-resize
-        // observer needs to make this chart track its tile's size
+        // observer needs to make this chart track its tile's width
         // (dashboard_base.html's own docstring: "the page's own script
         // must stash the view onto that same element as
         // el._vegaView = result.view") — every OTHER chart in this app
         // already does this; missed here when "Loopbaan" was first built,
         // which is exactly why shrinking the tile didn't shrink the chart.
+        // data-fixed-row-height (on the HTML side) tells that shared
+        // observer to only ever push WIDTH into this chart, never height —
+        // this is now a two-panel vconcat with each panel's own fixed
+        // height, not a single auto-fit view, the same reasoning
+        // chart-headcount/chart-benchmark already use on the Salaris page.
         document.getElementById("chart-timeline")._vegaView = result.view;
     });
 }
