@@ -702,7 +702,20 @@ wireHighlight(
                 aggregate: [{ op: "sum", field: "aantal", as: "total" }],
                 groupby: ["dimension_value", "Benchmark_Status", "matches_highlight"]
             },
-            { calculate: rankExpr("Benchmark_Status", BENCHMARK_ORDER), as: "benchmark_rank" }
+            { calculate: rankExpr("Benchmark_Status", BENCHMARK_ORDER), as: "benchmark_rank" },
+            // joinaggregate (unlike aggregate) adds a field to every existing
+            // row instead of collapsing them — grouped by dimension_value
+            // only, so it's each row's true share of that WHOLE bar
+            // (matched + dimmed together), unaffected by whatever's
+            // currently highlighted. The 100%-stacked axis already shows
+            // share visually; the tooltip only had the raw count, so
+            // reading off an exact percentage meant eyeballing the axis
+            // instead (Laura).
+            {
+                joinaggregate: [{ op: "sum", field: "total", as: "dimension_total" }],
+                groupby: ["dimension_value"]
+            },
+            { calculate: "datum.total / datum.dimension_total", as: "pct" }
         ],
         mark: { type: "bar", cursor: "pointer" },
         encoding: {
@@ -721,7 +734,8 @@ wireHighlight(
             tooltip: [
                 { field: "dimension_value", title: "Waarde" },
                 { field: "Benchmark_Status", title: "Benchmark" },
-                { field: "total", title: "Aantal" }
+                { field: "total", title: "Aantal" },
+                { field: "pct", title: "Aandeel", format: ".0%" }
             ]
         },
         config: baseConfig

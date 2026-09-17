@@ -414,7 +414,7 @@ def _relabel_salaris_categorie(rows: list[dict]) -> list[dict]:
 
 
 _EMPLOYEE_ROW_COLUMNS = (
-    "Employee_Key, Medewerker_Naam, Salaris, Salaris_Werkelijk, Salaris_Categorie, "
+    "Employee_Key, Medewerker_Naam, Salaris, FTE, Salaris_Werkelijk, Salaris_Categorie, "
     "Benchmark_Ratio, Benchmark_Status, Afdeling_Naam, Manager_Naam, Functie_Naam, "
     "Performance_Bin, Tevredenheidsband_Naam, Opleidingsniveau, Geslacht, Dienstjaren, "
     "Compa_Ratio_Interne_Schaal"
