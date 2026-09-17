@@ -38,6 +38,27 @@
   (see salaris.html's chart-headcount for why) should also get
   `data-fixed-row-height` on its container, so the observer only ever
   pushes width into it, never height.
+
+  Any <table> embedded anywhere in {% block tiles %} (an employee list,
+  or any other detail table a future page adds — Verzuim, etc.) should
+  get `class="data-table"` and nothing else: sortable column headers and
+  a free-text search box across every column are then wired up
+  automatically by the shared script below, no per-page JS required. Per
+  column, add on its <th>: `data-sort="text"` or `data-sort="number"` to
+  make it sortable at all (an unmarked column just isn't sortable);
+  `data-sort-order="A,B,C,..."` instead, on a column whose real order
+  isn't alphabetical/numerical (e.g. a named band like "Laag"/"Neutraal"/
+  "Hoog", or a range label like "< 3.0"/"3.0 - 3.5"). A `data-sort="number"`
+  column also needs `data-value="{{ the raw number }}"` on each of its
+  <td>s — the DISPLAYED text is usually formatted ("€43.804", "64%") and
+  can't be parsed back into a sortable number reliably, so the real value
+  needs to travel separately from its display string. Laura, after the
+  medewerkers detail table got this: "Can you make these latest changes
+  to the table into a 'every table on detail pages should have these
+  features' sort of template or rule for following pages?" — this
+  already was that template (a future page's table needs zero JS of its
+  own), this paragraph is just making that contract explicit here
+  alongside the rest of this file's per-page requirements.
 #}
 
 {% block head %}
