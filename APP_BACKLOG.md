@@ -70,12 +70,14 @@ the current semantic layer/catalog supports. Not tracked anywhere else yet
 measures/breakdowns get added to the catalog for other reasons, revisit
 what the chat can be taught to answer.
 
-### 4. Expand/collapse button styling
+### 4. Expand/collapse button styling — fix before demo
 
 The "Volledig weergeven"/"Inklappen" toggle buttons (oversized
 mobile/collapsible charts) work correctly but haven't had a visual pass.
 Laura: "Not too sure about how... they look, but that's purely aesthetics
-so not a big deal for now."
+so not a big deal for now" — not urgent, but she wants it fixed before she
+demos the app, so this one has a real deadline unlike the rest of this
+list.
 
 ### 5. ~~"% medewerkers onder benchmark" KPI disagrees with the benchmark chart at the margins~~ (RESOLVED)
 
