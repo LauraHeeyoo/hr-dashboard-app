@@ -20,6 +20,9 @@ body {
 .app-header {
     background: var(--navy);
     padding: 0 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
 }
 
 /* On the Salaris page (and any future page with its own drag/resize grid),
@@ -37,25 +40,90 @@ body:has(.grid-stack) .app-header {
 .app-nav {
     display: flex;
     gap: 4px;
+    overflow-x: auto;
+    min-width: 0;
 }
 
 .nav-tab {
     display: inline-block;
     padding: 16px 20px;
-    color: #b8bcc4;
+    color: #eef1f6;
     text-decoration: none;
     font-weight: 600;
+    font-size: 0.95rem;
     border-bottom: 3px solid transparent;
+    border-radius: 8px 8px 0 0;
+    transition: background 0.15s ease;
+    white-space: nowrap;
+}
+
+.nav-tab:not(.disabled):hover {
+    background: rgba(255, 255, 255, 0.14);
 }
 
 .nav-tab.active {
     color: var(--teal);
     border-bottom-color: var(--teal);
+    font-size: 1.1rem;
 }
 
+/* Pages not built yet — same shape/hover-eligible position as a real tab
+   (Laura wanted the roadmap visible at a glance), but visibly muted and
+   inert: no hover feedback, no pointer cursor, not a real link. */
 .nav-tab.disabled {
-    opacity: 0.4;
+    color: #6b7280;
     cursor: default;
+}
+
+.app-info {
+    position: relative;
+    flex-shrink: 0;
+}
+
+.app-info-btn {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    border: 1px solid #6b7280;
+    background: transparent;
+    color: #b8bcc4;
+    font-style: italic;
+    font-weight: 700;
+    font-size: 0.8rem;
+    cursor: pointer;
+}
+
+.app-info-btn:hover {
+    border-color: var(--teal);
+    color: var(--teal);
+}
+
+.app-info-popover {
+    display: none;
+    position: absolute;
+    top: calc(100% + 10px);
+    right: 0;
+    width: 300px;
+    background: var(--navy);
+    border: 1px solid var(--teal);
+    border-radius: 10px;
+    padding: 14px 16px;
+    font-size: 0.82rem;
+    line-height: 1.5;
+    color: #eef1f6;
+    z-index: 20;
+}
+
+.app-info-popover p {
+    margin: 0 0 8px;
+}
+
+.app-info-popover p:last-child {
+    margin-bottom: 0;
+}
+
+.app-info-popover.open {
+    display: block;
 }
 
 .app-main {

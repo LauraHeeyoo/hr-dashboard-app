@@ -10,9 +10,23 @@
 <body>
     <header class="app-header">
         <nav class="app-nav">
+            <span class="nav-tab disabled" title="Nog niet gebouwd">Highlights</span>
+            <span class="nav-tab disabled" title="Nog niet gebouwd">Profiel</span>
+            <span class="nav-tab disabled" title="Nog niet gebouwd">Samenstelling</span>
+            <span class="nav-tab disabled" title="Nog niet gebouwd">Beleving en performance</span>
             <a href="/salaris" class="nav-tab active">Salaris</a>
-            <span class="nav-tab disabled" title="Volgt in Phase 2">Verzuim</span>
+            <span class="nav-tab disabled" title="Nog niet gebouwd">Recruitment pipeline</span>
+            <span class="nav-tab disabled" title="Nog niet gebouwd">Recruitment kandidaten</span>
+            <span class="nav-tab disabled" title="Nog niet gebouwd">Verzuim</span>
+            <span class="nav-tab disabled" title="Nog niet gebouwd">Incidenten</span>
         </nav>
+        <div class="app-info">
+            <button type="button" class="app-info-btn" id="app-info-btn" aria-label="Over dit dashboard" aria-expanded="false">i</button>
+            <div class="app-info-popover" id="app-info-popover" role="dialog">
+                {% if last_refresh %}<p><strong>Laatste refresh:</strong> {{ last_refresh }}</p>{% endif %}
+                <p>Kleuren van blauw naar rood geven een schaal weer (bijv. laag naar hoog salaris of afstand tot benchmark) — dat is nooit een oordeel. Een rode of groene tint op een KPI-tegel betekent wel specifiek "afwijkend" of "gunstig" (bijv. loonkloof, afwijking van benchmark).</p>
+            </div>
+        </div>
     </header>
     <main class="app-main">
         {% block content %}{% endblock %}
@@ -22,5 +36,22 @@
         {% if last_refresh %}<span>Laatste refresh: {{ last_refresh }}</span>{% endif %}
         <img src="/static/heeyoo-logo.svg" alt="Heeyoo" class="app-footer-logo">
     </footer>
+    <script>
+    (function () {
+        const btn = document.getElementById("app-info-btn");
+        const popover = document.getElementById("app-info-popover");
+        btn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const open = popover.classList.toggle("open");
+            btn.setAttribute("aria-expanded", String(open));
+        });
+        document.addEventListener("click", (e) => {
+            if (!popover.contains(e.target) && e.target !== btn) {
+                popover.classList.remove("open");
+                btn.setAttribute("aria-expanded", "false");
+            }
+        });
+    })();
+    </script>
 </body>
 </html>
