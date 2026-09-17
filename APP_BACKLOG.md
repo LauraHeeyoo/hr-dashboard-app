@@ -121,6 +121,20 @@ possibly)":
   satisfaction/absence over the employee's last N reviews or months,
   instead of only "the latest value." This was the single change Laura
   singled out as the most valuable one over the old Power BI page.
+  Under discussion (not yet decided): rather than a separate chart, add
+  performance/tevredenheid(/betrokkenheid) as a second Y-axis directly on
+  "Loopbaan", so a career event and a wellbeing dip/rise are visible
+  together on one chart. Two real wrinkles to resolve before building:
+  (a) these scores currently live on different scales — confirmed live,
+  `Prestatie_Score` is ~2.4–5.0, `Tevredenheid_Score`/`Betrokkenheid_Score`
+  are both ~4.4–8.5 (already close to each other, Performance is the odd
+  one out) — Laura is touching the data generator anyway and may put all
+  three on one shared 0–5 or 0–10 scale, which would make a single
+  secondary axis much cleaner than three); (b) these scores are periodic
+  snapshot data (`fact_workforce_snapshot`, roughly monthly), not
+  `fact_employment` career events — a data-grain mismatch with what
+  "Loopbaan" currently draws from, not a blocker, just a second query to
+  add and layer on the same time axis at a different density.
 - **Peer-group comparison** instead of (or alongside) the org-wide average
   the old page's KPI mini-charts used — "vs. their own department" or "vs.
   people in the same role" is a fairer comparison than one company-wide
@@ -139,3 +153,17 @@ numeric flight-risk score, drilling into other employees from this page,
 and the qualification/diploma or safety-incident items the *old* Power BI
 project's own backlog had flagged (would need a data-availability check
 first — not confirmed to exist in this app's database yet).
+
+### 7. Profiel's charts don't auto-size within their tile
+
+Laura: "Grafieken auto-sizen nu niet binnen een tile" — the "Loopbaan"
+chart (and presumably any future Profiel chart) isn't resizing to fill its
+`.grid-stack-item` the way every chart on Salaris already does. Salaris's
+charts get this via `width/height: "container"` +
+`autosize: {type: "fit", contains: "padding"}` in the Vega-Lite spec, which
+"Loopbaan" already has too — so the cause isn't obviously the same fix,
+worth actually debugging (e.g. a missing/short container height at embed
+time, gridstack's resize event not reaching this page's own chart the way
+`dashboard_base.html`'s shared resize observer reaches Salaris's charts)
+rather than assumed. Explicitly deferred to "the next iteration," not
+urgent.
