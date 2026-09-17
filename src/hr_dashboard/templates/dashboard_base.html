@@ -21,7 +21,12 @@
     pages' saved layouts in localStorage never collide
   - {% block dashboard_script %} — page-specific JS (data, Vega specs,
     a cross-chart highlight mechanism, whatever), which runs before the
-    shared grid/resize wiring below sets up
+    shared grid/resize wiring below sets up. If it needs the `grid`
+    instance itself for something that must happen before the very first
+    layout pass (e.g. removing a few tiles for a collapsible section), it
+    can't reach `grid` directly yet at that point — define
+    `window.onGridReady(grid)` instead, and the shared script below calls
+    it right after `grid` is created.
 
   A Vega chart embedded anywhere in {% block tiles %} needs exactly two
   things to be picked up by the shared resize handling below: the
@@ -113,6 +118,17 @@ const grid = GridStack.init({
     // one narrow place gridstack's own option genuinely can't do it.
 });
 
+// Optional per-page hook: a page's own dashboard_script block (above) runs
+// BEFORE this point (see the docstring up top), so it can't reach `grid`
+// directly yet — if it needs to (e.g. salaris.html detaching a few tiles
+// into a collapsible "Meer analyses" section so they're never part of the
+// very first layout pass), it can define window.onGridReady(grid) and
+// have it called right here, before loadSavedLayout()/reflowGrid() ever
+// run.
+if (typeof window.onGridReady === "function") {
+    window.onGridReady(grid);
+}
+
 // Set true only while the responsive-column logic below is itself moving
 // tiles around programmatically — grid.column()/update() fire the same
 // "change" event a real drag does, so without this guard the automatic
@@ -172,7 +188,11 @@ grid.on("change", () => saveLayout());
 // re-placed ourselves, in their own pre-reflow reading order, packed left
 // like wrapped text — the same "shift up if there's room" gravity
 // gridstack already gives for free, just also going left.
-const MOBILE_BREAKPOINT_PX = 640; // matches styles.css's pills/dropdown swap
+// Deliberately a different (narrower) threshold than styles.css's own
+// pills/dropdown swap (900px) — that one is about a single tile's own
+// readability, this one is about the whole page's tiles no longer having
+// room to sit side by side at all.
+const MOBILE_BREAKPOINT_PX = 640;
 
 // Sized for the desktop 12-column design (a chart's minW:5 means "don't go
 // below ~600px" of its own 1/12th-ish share) — on a 1-column mobile grid

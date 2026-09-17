@@ -71,55 +71,29 @@
             <input type="hidden" name="dim_benchmark" value="{{ dim_benchmark }}">
             <input type="hidden" name="dim_new_hire" value="{{ dim_new_hire }}">
             <div class="filter-actions">
-                <button type="submit" class="btn btn-primary">Toepassen</button>
-                <a href="/salaris" class="btn btn-secondary">Wissen</a>
+                <a href="/salaris" class="btn btn-ghost">Wis filters</a>
             </div>
         </form>
     </aside>
 </div>
 
-<div class="grid-stack-item" gs-id="kpi-mediaan" gs-x="0" gs-y="3" gs-w="2" gs-h="3" gs-min-w="2">
-    <div class="grid-stack-item-content kpi-card">
-        <span class="tile-grip"></span>
-        <div class="kpi-value" id="kpi-median-salaris">
-            {% if kpis.median_salaris %}€{{ "{:,.0f}".format(kpis.median_salaris).replace(",", ".") }}{% else %}—{% endif %}
-        </div>
-        <div class="kpi-label">Mediaan salaris</div>
-    </div>
-</div>
-
-<div class="grid-stack-item" gs-id="kpi-benchmark-ratio" gs-x="10" gs-y="3" gs-w="2" gs-h="3" gs-min-w="2">
-    <div class="grid-stack-item-content kpi-card">
-        <span class="tile-grip"></span>
-        <div class="kpi-value" id="kpi-benchmark-ratio">
-            {% if kpis.gemiddeld_benchmark_ratio %}{{ "{:.1f}".format(kpis.gemiddeld_benchmark_ratio * 100) }}%{% else %}—{% endif %}
-        </div>
-        <div class="kpi-label">
-            Gemiddeld t.o.v. benchmark
-            <span class="tooltip-icon" tabindex="0" title="De benchmark is het externe marktsalaris voor dezelfde functie, zoals vastgelegd in fact_salary_benchmark (bijvoorbeeld o.b.v. een salarisbenchmark-onderzoek per functiegroep). Dit percentage zet het eigen salaris (Salaris, voltijd-equivalent) af tegen dat marktcijfer — 100% betekent exact op de markt, lager betekent onder de markt.">?</span>
-        </div>
-    </div>
-</div>
-
-<div class="grid-stack-item" gs-id="kpi-onder-benchmark" gs-x="6" gs-y="3" gs-w="2" gs-h="3" gs-min-w="2">
-    <div class="grid-stack-item-content kpi-card kpi-card-clickable">
-        <span class="tile-grip"></span>
-        <a href="{{ medewerkers_urls.onder_benchmark }}">
-            <div class="kpi-value" id="kpi-pct-onder-benchmark">
-                {% if kpis.pct_onder_benchmark %}{{ "{:.1f}".format(kpis.pct_onder_benchmark * 100) }}%{% else %}—{% endif %}
-            </div>
-            <div class="kpi-label">% medewerkers onder benchmark</div>
-        </a>
-    </div>
-</div>
-
-<div class="grid-stack-item" gs-id="kpi-aantal" gs-x="8" gs-y="3" gs-w="2" gs-h="3" gs-min-w="2">
+<div class="grid-stack-item" gs-id="kpi-aantal" gs-x="0" gs-y="3" gs-w="2" gs-h="3" gs-min-w="2">
     <div class="grid-stack-item-content kpi-card kpi-card-clickable">
         <span class="tile-grip"></span>
         <a href="{{ medewerkers_urls.alle }}">
             <div class="kpi-value" id="kpi-aantal-medewerkers">{{ kpis.aantal_medewerkers }}</div>
             <div class="kpi-label">Actieve medewerkers</div>
         </a>
+    </div>
+</div>
+
+<div class="grid-stack-item" gs-id="kpi-mediaan" gs-x="2" gs-y="3" gs-w="2" gs-h="3" gs-min-w="2">
+    <div class="grid-stack-item-content kpi-card">
+        <span class="tile-grip"></span>
+        <div class="kpi-value" id="kpi-median-salaris">
+            {% if kpis.median_salaris %}€{{ "{:,.0f}".format(kpis.median_salaris).replace(",", ".") }}{% else %}—{% endif %}
+        </div>
+        <div class="kpi-label">Mediaan salaris</div>
     </div>
 </div>
 
@@ -131,20 +105,51 @@
         </div>
         <div class="kpi-label">
             Totale loonsom
-            <span class="tooltip-icon" tabindex="0" title="Som van het werkelijk uitbetaalde salaris (Salaris x FTE) van alle actieve medewerkers op de peildatum — niet het voltijd-equivalent dat de rest van deze pagina gebruikt, want dat zou de loonkosten overschatten voor iedereen die niet 100% werkt.">?</span>
+            <span class="tooltip-icon" tabindex="0">?
+                <span class="tooltip-bubble" role="tooltip">Som van het werkelijk uitbetaalde salaris (Salaris x FTE) van alle actieve medewerkers op de peildatum — niet het voltijd-equivalent dat de rest van deze pagina gebruikt, want dat zou de loonkosten overschatten voor iedereen die niet 100% werkt.</span>
+            </span>
         </div>
     </div>
 </div>
 
-<div class="grid-stack-item" gs-id="kpi-paygap" gs-x="2" gs-y="3" gs-w="2" gs-h="3" gs-min-w="2">
+<div class="grid-stack-item" gs-id="kpi-benchmark-ratio" gs-x="6" gs-y="3" gs-w="2" gs-h="3" gs-min-w="2">
+    <div class="grid-stack-item-content kpi-card">
+        <span class="tile-grip"></span>
+        <div class="kpi-value">
+            <span id="kpi-benchmark-ratio">{% if kpis.gemiddeld_benchmark_ratio %}{{ "{:.1f}".format(kpis.gemiddeld_benchmark_ratio * 100) }}%{% else %}—{% endif %}</span><span class="kpi-indicator" id="kpi-benchmark-ratio-arrow"></span>
+        </div>
+        <div class="kpi-label">
+            Gemiddeld t.o.v. benchmark
+            <span class="tooltip-icon" tabindex="0">?
+                <span class="tooltip-bubble" role="tooltip">De benchmark is het externe marktsalaris voor dezelfde functie, zoals vastgelegd in fact_salary_benchmark (bijvoorbeeld o.b.v. een salarisbenchmark-onderzoek per functiegroep). Dit percentage zet het eigen salaris (Salaris, voltijd-equivalent) af tegen dat marktcijfer — 100% betekent exact op de markt, lager betekent onder de markt.</span>
+            </span>
+        </div>
+    </div>
+</div>
+
+<div class="grid-stack-item" gs-id="kpi-onder-benchmark" gs-x="8" gs-y="3" gs-w="2" gs-h="3" gs-min-w="2">
+    <div class="grid-stack-item-content kpi-card kpi-card-clickable">
+        <span class="tile-grip"></span>
+        <a href="{{ medewerkers_urls.onder_benchmark }}">
+            <div class="kpi-value">
+                <span id="kpi-pct-onder-benchmark">{% if kpis.pct_onder_benchmark %}{{ "{:.1f}".format(kpis.pct_onder_benchmark * 100) }}%{% else %}—{% endif %}</span><span class="kpi-indicator" id="kpi-pct-onder-benchmark-arrow"></span>
+            </div>
+            <div class="kpi-label">% medewerkers onder benchmark</div>
+        </a>
+    </div>
+</div>
+
+<div class="grid-stack-item" gs-id="kpi-paygap" gs-x="10" gs-y="3" gs-w="2" gs-h="3" gs-min-w="2">
     <div class="grid-stack-item-content kpi-card">
         <span class="tile-grip"></span>
         <div class="kpi-value" id="kpi-gender-pay-gap">
             {% if gender_pay_gap.gecorrigeerd_pct is not none %}{{ "{:.1f}".format(gender_pay_gap.gecorrigeerd_pct * 100) }}%{% else %}—{% endif %}
         </div>
         <div class="kpi-label">
-            Gecorrigeerde loonkloof (m/v)
-            <span class="tooltip-icon" tabindex="0" title="Gecorrigeerd voor functie: per functietitel met zowel mannelijke als vrouwelijke medewerkers wordt het gemiddelde salarisverschil berekend, en die verschillen worden gewogen naar koppen samengevoegd. Ongecorrigeerd (simpel gemiddelde m.v.): {{ '{:.1f}'.format(gender_pay_gap.ongecorrigeerd_pct * 100) if gender_pay_gap.ongecorrigeerd_pct is not none else '—' }}%. Gebaseerd op {{ gender_pay_gap.aantal_man }} mannelijke en {{ gender_pay_gap.aantal_vrouw }} vrouwelijke medewerkers over {{ gender_pay_gap.aantal_vergelijkbare_functies }} vergelijkbare functies.">?</span>
+            Gecorrigeerde loonkloof (m/v)<span id="kpi-paygap-direction"></span>
+            <span class="tooltip-icon" tabindex="0">?
+                <span class="tooltip-bubble" role="tooltip">Gecorrigeerd voor functie: per functietitel met zowel mannelijke als vrouwelijke medewerkers wordt het gemiddelde salarisverschil berekend, en die verschillen worden gewogen naar koppen samengevoegd. Een positief percentage betekent dat mannen gemiddeld meer verdienen dan vrouwen; een negatief percentage betekent dat vrouwen meer verdienen. Ongecorrigeerd (simpel gemiddelde m.v.): {{ '{:.1f}'.format(gender_pay_gap.ongecorrigeerd_pct * 100) if gender_pay_gap.ongecorrigeerd_pct is not none else '—' }}%. Gebaseerd op {{ gender_pay_gap.aantal_man }} mannelijke en {{ gender_pay_gap.aantal_vrouw }} vrouwelijke medewerkers over {{ gender_pay_gap.aantal_vergelijkbare_functies }} vergelijkbare functies.</span>
+            </span>
         </div>
     </div>
 </div>
@@ -170,7 +175,9 @@
         <span class="tile-grip"></span>
         <h2>
             Positie in eigen salarisschaal (compa-ratio)
-            <span class="tooltip-icon" tabindex="0" title="0% = onderkant van de eigen salarisschaal (dim_salary_scale), 100% = bovenkant. Dit is een ander vraagstuk dan de benchmark hierboven: dit zet iemands salaris af tegen de interne schaal voor die functie/niveau, niet tegen de externe markt.">?</span>
+            <span class="tooltip-icon" tabindex="0">?
+                <span class="tooltip-bubble" role="tooltip">0% = onderkant van de eigen salarisschaal (dim_salary_scale), 100% = bovenkant. Dit is een ander vraagstuk dan de benchmark hierboven: dit zet iemands salaris af tegen de interne schaal voor die functie/niveau, niet tegen de externe markt.</span>
+            </span>
         </h2>
         <div id="chart-comparatio" class="chart-canvas"></div>
     </div>
@@ -213,7 +220,12 @@
                 {% endfor %}
             </select>
         </div>
-        <h2>Verdeling salaris t.o.v. benchmark, per {{ benchmark_title|lower }}</h2>
+        <h2>
+            Verdeling salaris t.o.v. benchmark, per {{ benchmark_title|lower }}
+            <span class="tooltip-icon" tabindex="0">?
+                <span class="tooltip-bubble" role="tooltip">Elke medewerker valt in één van vijf banden t.o.v. de externe marktbenchmark (zie de KPI "Gemiddeld t.o.v. benchmark" voor de uitleg van de benchmark zelf) — deze grafiek laat de verdeling zien in plaats van alleen het gemiddelde, zodat ook zichtbaar is hoe gespreid dat gemiddelde tot stand komt.</span>
+            </span>
+        </h2>
         <div class="chart-scroll">
             <div id="chart-benchmark" class="chart-canvas" data-fixed-row-height></div>
         </div>
@@ -235,7 +247,12 @@
                 {% endfor %}
             </select>
         </div>
-        <h2>Startsalaris versus huidig salaris, per {{ new_hire_title|lower }}</h2>
+        <h2>
+            Startsalaris versus huidig salaris, per {{ new_hire_title|lower }}
+            <span class="tooltip-icon" tabindex="0">?
+                <span class="tooltip-bubble" role="tooltip">Startsalaris is het salaris bij de allereerste geregistreerde meting van een medewerker (ongeacht wanneer dat was), vergeleken met hun huidige salaris — dit laat zien of nieuwe instroom op een ander niveau binnenkomt dan waar bestaand personeel in dezelfde groep inmiddels naartoe is gegroeid. Alleen actief, op de peildatum aanwezig personeel telt mee.</span>
+            </span>
+        </h2>
         <div class="chart-scroll">
             <div id="chart-new-hire" class="chart-canvas" data-fixed-row-height></div>
         </div>
@@ -246,7 +263,12 @@
     <div class="grid-stack-item-content chart-card">
         <span class="tile-grip"></span>
         <div class="lfl-header">
-            <h2>Gemiddelde salarisgroei like-for-like (YoY)</h2>
+            <h2>
+                Gemiddelde salarisgroei like-for-like (YoY)
+                <span class="tooltip-icon" tabindex="0">?
+                    <span class="tooltip-bubble" role="tooltip">"Like-for-like" telt alleen medewerkers mee die het hele jaar in dienst zijn gebleven, zodat de groei niet vertekend wordt door in- en uitstroom. "Alle behouden medewerkers" telt iedereen die is gebleven, ongeacht of hun functie of contract veranderde; "Zelfde functie en contract" beperkt dit tot wie ook exact dezelfde functie én hetzelfde contracttype hield. Elk punt is de gemiddelde procentuele salarisgroei ten opzichte van 12 maanden eerder.</span>
+                </span>
+            </h2>
             <div class="lfl-granularity">
                 <button type="button" class="dimension-pill active" data-granularity="month">Maand</button>
                 <button type="button" class="dimension-pill" data-granularity="year">Jaar</button>
@@ -422,24 +444,114 @@ function matchesHighlight(row, hl) {
     return true;
 }
 
+// --- KPI conditional achtergrond -----------------------------------------
+// Op deze drie tiles draagt de achtergrondkleur echte betekenis (in
+// tegenstelling tot de neutrale teal-rand die elke andere tile al heeft) —
+// en is die kleur nooit de ENIGE drager van die betekenis: elke gekleurde
+// tile krijgt ook een pijltje of een expliciete tekst, voor wie kleur
+// slecht kan onderscheiden.
+const KPI_GOOD = "#59b88c";
+const KPI_BAD = "#b5332e";
+const KPI_MANNEN = "#2a78d6";
+const KPI_VROUWEN = "#c2679a";
+
+function mixHex(hexA, hexB, t) {
+    const clamped = Math.min(Math.max(t, 0), 1);
+    const a = [1, 3, 5].map((i) => parseInt(hexA.slice(i, i + 2), 16));
+    const b = [1, 3, 5].map((i) => parseInt(hexB.slice(i, i + 2), 16));
+    const c = a.map((v, i) => Math.round(v + (b[i] - v) * clamped));
+    return `rgb(${c[0]}, ${c[1]}, ${c[2]})`;
+}
+
+const BENCHMARK_RATIO_CAP = 0.20;
+const ONDER_BENCHMARK_CAP = 0.20;
+const benchmarkRatioCard = document.getElementById("kpi-benchmark-ratio").closest(".kpi-card");
+const benchmarkRatioArrow = document.getElementById("kpi-benchmark-ratio-arrow");
+const onderBenchmarkCard = document.getElementById("kpi-pct-onder-benchmark").closest(".kpi-card");
+const onderBenchmarkArrow = document.getElementById("kpi-pct-onder-benchmark-arrow");
+
+// `deviation` > 0 => richting "slecht" (rood), < 0 => richting "goed"
+// (groen) — de aanroeper bepaalt zelf wat voor déze KPI "slecht" betekent.
+function applyDeviationStyle(cardEl, arrowEl, deviation, cap, aboveArrow, belowArrow) {
+    if (deviation === null || deviation === undefined) {
+        cardEl.style.backgroundColor = "";
+        arrowEl.textContent = "";
+        return;
+    }
+    const t = Math.min(Math.abs(deviation) / cap, 1);
+    cardEl.style.backgroundColor = mixHex("#ffffff", deviation > 0 ? KPI_BAD : KPI_GOOD, t);
+    arrowEl.textContent = deviation > 0 ? aboveArrow : belowArrow;
+}
+
+// Boven de 100%-lijn is goed (▲), eronder is slecht (▼) — dus de "slecht"-
+// richting is juist ONDER de referentie, tegenovergesteld aan hoe de
+// pijltjes zelf getekend worden.
+function applyBenchmarkRatioStyle(ratio) {
+    applyDeviationStyle(
+        benchmarkRatioCard, benchmarkRatioArrow,
+        ratio === null || ratio === undefined ? null : 1 - ratio,
+        BENCHMARK_RATIO_CAP, "▼", "▲"
+    );
+}
+
+// Boven de 50%-lijn (meer dan de helft onder benchmark) is slecht (▲),
+// eronder is goed (▼).
+function applyOnderBenchmarkStyle(fraction) {
+    applyDeviationStyle(
+        onderBenchmarkCard, onderBenchmarkArrow,
+        fraction === null || fraction === undefined ? null : fraction - 0.5,
+        ONDER_BENCHMARK_CAP, "▲", "▼"
+    );
+}
+
+// De loonkloof-KPI recomputet nooit op highlight (zie de docstring
+// hierboven) — dus deze hoeft maar één keer, bij het laden, aangeroepen te
+// worden, met de server-berekende waarde.
+const PAYGAP_DEAD_ZONE = 0.005;
+const PAYGAP_CAP = 0.10;
+function applyPaygapStyle(pct) {
+    const card = document.getElementById("kpi-gender-pay-gap").closest(".kpi-card");
+    const directionEl = document.getElementById("kpi-paygap-direction");
+    if (pct === null || pct === undefined || Math.abs(pct) < PAYGAP_DEAD_ZONE) {
+        card.style.backgroundColor = "";
+        directionEl.textContent = "";
+        return;
+    }
+    const t = (Math.abs(pct) - PAYGAP_DEAD_ZONE) / (PAYGAP_CAP - PAYGAP_DEAD_ZONE);
+    card.style.backgroundColor = mixHex("#ffffff", pct > 0 ? KPI_MANNEN : KPI_VROUWEN, t);
+    directionEl.textContent = pct > 0 ? "mannen verdienen meer" : "vrouwen verdienen meer";
+}
+
+// Server-berekende startwaarden — ook wat updateKpisForHighlight() teruggeeft
+// naar zodra een highlight weer wordt opgeheven.
+const kpiBaselineRatios = {
+    benchmarkRatio: {{ kpis.gemiddeld_benchmark_ratio | tojson }},
+    pctOnderBenchmark: {{ kpis.pct_onder_benchmark | tojson }},
+};
+applyBenchmarkRatioStyle(kpiBaselineRatios.benchmarkRatio);
+applyOnderBenchmarkStyle(kpiBaselineRatios.pctOnderBenchmark);
+applyPaygapStyle({{ gender_pay_gap.gecorrigeerd_pct | tojson }});
+
 function updateKpisForHighlight() {
     if (!currentHighlight) {
         for (const [key, el] of Object.entries(kpiElements)) el.textContent = kpiBaseline[key];
+        applyBenchmarkRatioStyle(kpiBaselineRatios.benchmarkRatio);
+        applyOnderBenchmarkStyle(kpiBaselineRatios.pctOnderBenchmark);
         return;
     }
     const subset = employeeRows.filter((row) => matchesHighlight(row, currentHighlight));
     const ratios = subset.map((r) => r.Benchmark_Ratio).filter((r) => r !== null && r !== undefined);
+    const avgRatio = ratios.length ? ratios.reduce((a, b) => a + b, 0) / ratios.length : null;
+    const pctOnder = ratios.length ? ratios.filter((r) => r < 1.0).length / ratios.length : null;
 
     kpiElements.aantalMedewerkers.textContent = subset.length;
     kpiElements.medianSalaris.textContent = subset.length
         ? formatEuro(median(subset.map((r) => r.Salaris)))
         : "—";
-    kpiElements.benchmarkRatio.textContent = ratios.length
-        ? formatPct(ratios.reduce((a, b) => a + b, 0) / ratios.length)
-        : "—";
-    kpiElements.pctOnderBenchmark.textContent = ratios.length
-        ? formatPct(ratios.filter((r) => r < 1.0).length / ratios.length)
-        : "—";
+    kpiElements.benchmarkRatio.textContent = avgRatio !== null ? formatPct(avgRatio) : "—";
+    kpiElements.pctOnderBenchmark.textContent = pctOnder !== null ? formatPct(pctOnder) : "—";
+    applyBenchmarkRatioStyle(avgRatio);
+    applyOnderBenchmarkStyle(pctOnder);
 }
 
 // Salary bands, labeled with the old PBIP's own numbered, qualitative
@@ -450,14 +562,24 @@ const CATEGORY_ORDER = [
     "1. Laag", "2. Ondergemiddeld", "3. Gemiddeld",
     "4. Bovengemiddeld", "5. Hoog", "6. Extreem hoog"
 ];
-const CATEGORY_COLORS = ["#2a78d6", "#1baf7a", "#10bdc6", "#eda100", "#eb6834", "#e34948"];
+// A muted, colorblind-safe blue-to-red sequential scale (ColorBrewer's
+// RdBu diverging scale, used here without its neutral midpoint since this
+// variable has none) — koel = laag, warm = hoog, the more universally
+// intuitive direction (Laura, after reconsidering her own first instinct
+// to reverse it: "warm = hoog" reads more naturally to most people than
+// tying color to a good/bad value judgment).
+const CATEGORY_COLORS = ["#2166ac", "#67a9cf", "#d1e5f0", "#fddbc7", "#ef8a62", "#b2182b"];
 
 // Must stay in sync with BENCHMARK_STATUS_ORDER in salary.py.
 const BENCHMARK_ORDER = [
     "Ver onder benchmark", "Onder benchmark", "Rond benchmark",
     "Boven benchmark", "Ver boven benchmark"
 ];
-const BENCHMARK_COLORS = ["#b5332e", "#eda100", "#9aa0a6", "#59b88c", "#1a7a4c"];
+// Same blue-to-red family as CATEGORY_COLORS (magnitude only, not a
+// judgment — "boven benchmark" isn't colored as "good" here, just as "a
+// higher number"), but with a genuine neutral gray at the midpoint since
+// this scale, unlike salary category, has a real reference point (100%).
+const BENCHMARK_COLORS = ["#2166ac", "#67a9cf", "#999999", "#ef8a62", "#b2182b"];
 
 const baseConfig = {
     background: null,
@@ -490,6 +612,24 @@ const OPACITY_ENCODING = {
     legend: null
 };
 const MATCH_ORDER = { field: "matches_highlight", sort: "descending" };
+
+// A stacked bar's segment order isn't controlled by the color encoding's
+// own `sort` (that only reorders the legend) — without an explicit `order`
+// channel of its own, Vega-Lite falls back to something that isn't the
+// fixed category order, so each bar's segments visibly didn't line up in
+// the same 1→6 / "ver onder"→"ver boven" sequence from bar to bar (Laura
+// noticed this in "Aantal medewerkers, per afdeling").
+// This builds a Vega expression that ranks a category string by its index
+// in the same fixed array already used for color/legend. An array-valued
+// `order` channel (primary category rank, matches_highlight as tiebreaker)
+// gets silently dropped by Vega-Lite's stacked-bar order validation ("does
+// not contain any data field, datum, value, or signal" in the console) —
+// so both keys are folded into ONE numeric field here instead: category
+// rank as the high-order digits, matches_highlight (true=0, false=1) as
+// the tiebreaker, only ever breaking a tie within the same category.
+function rankExpr(field, order) {
+    return `indexof(${JSON.stringify(order)}, datum.${field}) * 10 + (datum.matches_highlight ? 0 : 1)`;
+}
 
 // For raw per-employee rows (every real column already present on every
 // row): a highlight matches when its field/value pair matches this row's
@@ -573,7 +713,8 @@ wireHighlight(
             {
                 aggregate: [{ op: "sum", field: "aantal", as: "total" }],
                 groupby: ["dimension_value", "Salaris_Categorie", "matches_highlight"]
-            }
+            },
+            { calculate: rankExpr("Salaris_Categorie", CATEGORY_ORDER), as: "category_rank" }
         ],
         mark: { type: "bar", cursor: "pointer" },
         encoding: {
@@ -585,7 +726,7 @@ wireHighlight(
                 legend: { title: "Salaris categorie" }
             },
             opacity: OPACITY_ENCODING,
-            order: MATCH_ORDER,
+            order: { field: "category_rank" },
             tooltip: [{ field: "dimension_value", title: "Waarde" }, { field: "Salaris_Categorie", title: "Categorie" }, { field: "total", title: "Aantal" }]
         },
         config: baseConfig
@@ -609,7 +750,8 @@ wireHighlight(
             {
                 aggregate: [{ op: "sum", field: "aantal", as: "total" }],
                 groupby: ["dimension_value", "Benchmark_Status", "matches_highlight"]
-            }
+            },
+            { calculate: rankExpr("Benchmark_Status", BENCHMARK_ORDER), as: "benchmark_rank" }
         ],
         mark: { type: "bar", cursor: "pointer" },
         encoding: {
@@ -624,7 +766,7 @@ wireHighlight(
                 legend: { title: "Benchmark" }
             },
             opacity: OPACITY_ENCODING,
-            order: MATCH_ORDER,
+            order: { field: "benchmark_rank" },
             tooltip: [
                 { field: "dimension_value", title: "Waarde" },
                 { field: "Benchmark_Status", title: "Benchmark" },
@@ -660,7 +802,7 @@ wireHighlight(
         ],
         layer: [
             {
-                mark: { type: "point", size: 20, color: "#2a3f5f" },
+                mark: { type: "point", size: 20, color: "#2a3f5f" }, // navy — see the trend line below
                 encoding: {
                     x: { field: "Dienstjaren", type: "quantitative", title: "Dienstjaren" },
                     y: { field: "Salaris", type: "quantitative", title: "Salaris (€)" },
@@ -674,7 +816,13 @@ wireHighlight(
                     { bin: { step: 1 }, field: "Dienstjaren", as: "Dienstjaren_bin" },
                     { aggregate: [{ op: "mean", field: "Salaris", as: "gem_salaris" }], groupby: ["Dienstjaren_bin"] }
                 ],
-                mark: { type: "line", point: true, color: "#2a78d6", strokeWidth: 2 },
+                // Teal for the trend line (the "signal" drawn over the raw
+                // points), navy for the points themselves — the same
+                // teal/navy pairing as the LFL trend and new-hire charts,
+                // reused here since this isn't a warm-cool magnitude
+                // question, just two datasets (raw + aggregate) needing to
+                // read as distinct.
+                mark: { type: "line", point: true, color: "#10bdc6", strokeWidth: 2 },
                 encoding: {
                     x: { field: "Dienstjaren_bin", type: "quantitative" },
                     y: { field: "gem_salaris", type: "quantitative" },
@@ -747,7 +895,11 @@ wireHighlight(
             yOffset: { field: "Salaris_Type", sort: ["gem_start_salaris", "gem_huidig_salaris"] },
             color: {
                 field: "Salaris_Type", type: "nominal",
-                scale: { domain: ["gem_start_salaris", "gem_huidig_salaris"], range: ["#9aa0a6", "#2a78d6"] },
+                // Same teal/navy pairing as the LFL trend chart (teal for
+                // the "current state" series, navy for the reference/
+                // comparison one) — not a warm-cool magnitude question, so
+                // it gets the other shared palette instead.
+                scale: { domain: ["gem_start_salaris", "gem_huidig_salaris"], range: ["#2a3f5f", "#10bdc6"] },
                 legend: {
                     title: null,
                     labelExpr: "datum.label == 'gem_start_salaris' ? 'Startsalaris' : 'Huidig salaris'"
@@ -957,4 +1109,76 @@ chatForm.addEventListener("submit", async (event) => {
         chatAnswer.textContent = "Er ging iets mis bij het ophalen van het antwoord.";
     }
 });
+
+// --- "Meer analyses" ------------------------------------------------------
+// The 4 more niche charts (Laura: Spreiding salaris, Salaris versus
+// dienstjaren, Positie in eigen salarisschaal, Startsalaris versus huidig)
+// stay out of the page's first impression until asked for, so a first-time
+// visitor sees KPI's + the chat + the two/three headline charts, not all
+// ~14 tiles at once. They're already fully Vega-embedded above like every
+// other chart (wireHighlight ran on them same as the rest) — collapsing
+// them here only ever touches the GRID, never the charts themselves, so
+// showing them again is just re-adding the same live tile, nothing to
+// re-render.
+//
+// This needs the `grid` instance, which this whole dashboard_script block
+// runs before (see dashboard_base.html's docstring) — window.onGridReady is the
+// hook it calls once `grid` actually exists, right before the very first
+// loadSavedLayout()/reflowGrid() pass, so these tiles are never part of
+// that first pass at all (not added-then-immediately-removed).
+const COLLAPSIBLE_TILE_IDS = ["chart-distribution", "chart-tenure", "chart-comparatio", "chart-new-hire"];
+const MORE_ANALYSES_KEY = "salarisMoreAnalysesOpen";
+
+window.onGridReady = function (grid) {
+    const collapsedTiles = COLLAPSIBLE_TILE_IDS
+        .map((id) => document.querySelector(`[gs-id="${id}"]`))
+        .filter(Boolean);
+    collapsedTiles.forEach((el) => {
+        grid.removeWidget(el, false);
+        el.style.display = "none";
+    });
+
+    let isOpen = false;
+    try {
+        isOpen = localStorage.getItem(MORE_ANALYSES_KEY) === "true";
+    } catch (e) {
+        isOpen = false;
+    }
+
+    const toggleBtn = document.createElement("button");
+    toggleBtn.type = "button";
+    toggleBtn.className = "btn btn-secondary more-analyses-btn";
+    document.querySelector(".grid-stack").insertAdjacentElement("afterend", toggleBtn);
+
+    function setOpen(open) {
+        isOpen = open;
+        toggleBtn.textContent = open ? "Minder analyses ▲" : "Meer analyses ▾";
+        try {
+            localStorage.setItem(MORE_ANALYSES_KEY, String(open));
+        } catch (e) {
+            // Private browsing / blocked storage: just won't remember
+            // this choice across reloads, nothing else depends on it.
+        }
+        collapsedTiles.forEach((el) => {
+            if (open) {
+                el.style.display = "";
+                // gridstack v11 dropped support for addWidget(HTMLElement) —
+                // makeWidget() is the current API for turning an existing,
+                // already-in-DOM .grid-stack-item back into a tracked,
+                // draggable/resizable grid widget.
+                grid.makeWidget(el);
+            } else {
+                grid.removeWidget(el, false);
+                el.style.display = "none";
+            }
+        });
+    }
+
+    toggleBtn.addEventListener("click", () => setOpen(!isOpen));
+    // Always run once on load — not just when isOpen is true — so the
+    // button gets its initial label ("Meer analyses ▾") even when starting
+    // closed (the default state); setOpen(false) here is a no-op on the
+    // tiles (already detached above) but is what actually sets the text.
+    setOpen(isOpen);
+};
 {% endblock %}

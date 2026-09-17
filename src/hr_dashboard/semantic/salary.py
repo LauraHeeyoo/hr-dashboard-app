@@ -236,10 +236,20 @@ def get_salary_kpis(as_of_date: date, filters: SalaryFilters) -> SalaryKpis:
             params,
         )
         row = cur.fetchone()
+        # AVG() on a SQL DECIMAL column comes back from pyodbc as
+        # Decimal, not float, regardless of the SalaryKpis type hint —
+        # cast explicitly here so `| tojson` in salaris.html (used for the
+        # click-to-highlight KPI recompute) can serialize these values.
         return SalaryKpis(
-            median_salaris=median_salaris,
-            gemiddeld_benchmark_ratio=row.gemiddeld_benchmark_ratio,
-            pct_onder_benchmark=row.pct_onder_benchmark,
+            median_salaris=float(median_salaris) if median_salaris is not None else None,
+            gemiddeld_benchmark_ratio=(
+                float(row.gemiddeld_benchmark_ratio)
+                if row.gemiddeld_benchmark_ratio is not None
+                else None
+            ),
+            pct_onder_benchmark=(
+                float(row.pct_onder_benchmark) if row.pct_onder_benchmark is not None else None
+            ),
             aantal_medewerkers=row.aantal_medewerkers,
         )
 
@@ -323,13 +333,17 @@ def get_corrected_gender_pay_gap(as_of_date: date, filters: SalaryFilters) -> Ge
             params * 5,
         )
         row = cur.fetchone()
+        # AVG()/SUM() on the SQL DECIMAL Salaris column come back from
+        # pyodbc as Decimal — cast to float so `| tojson` in salaris.html
+        # (used for the paygap KPI tile's conditional styling) can
+        # serialize these values.
         ongecorrigeerd = (
-            (row.Gem_Man - row.Gem_Vrouw) / row.Gem_Man
+            float((row.Gem_Man - row.Gem_Vrouw) / row.Gem_Man)
             if row.Gem_Man and row.Gem_Vrouw
             else None
         )
         gecorrigeerd = (
-            row.Gewogen_Verschil / row.Gewogen_Noemer
+            float(row.Gewogen_Verschil / row.Gewogen_Noemer)
             if row.Gewogen_Verschil is not None and row.Gewogen_Noemer
             else None
         )
