@@ -463,7 +463,17 @@ body:has(.grid-stack) .app-header {
 .grid-stack-item-content.filter-rail {
     display: flex;
     flex-direction: column;
-    overflow: hidden;
+    /* !important: gridstack.js's own CSS (loaded from the CDN, so its
+       exact selector can't even be inspected here — cross-origin
+       stylesheets throw on cssRules access) sets its own default
+       overflow-y on .grid-stack-item-content that otherwise wins this
+       cascade, leaving overflow-y effectively "auto" despite this rule.
+       That silently turned a KPI tile's own invisible (opacity:0) at-rest
+       tooltip-bubble — positioned absolute, well past the tile's small
+       box — into a real, visible scrollbar with nothing scrollable behind
+       it (Laura: "sommige KPI's hebben een scrollbar terwijl er geen info
+       onder zit"). */
+    overflow: hidden !important;
 }
 
 .grid-stack-item-content.kpi-card {
@@ -478,7 +488,10 @@ body:has(.grid-stack) .app-header {
 }
 
 .grid-stack-item-content.filter-rail {
-    overflow-y: auto;
+    /* !important to win over the shared !important above — the filter
+       rail is the one tile that genuinely needs a real scrollbar when its
+       filters don't all fit at once. */
+    overflow-y: auto !important;
 }
 
 .grid-stack-item-content.chart-card > h2,

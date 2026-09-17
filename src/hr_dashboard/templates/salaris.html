@@ -146,15 +146,16 @@
             {% if gender_pay_gap.gecorrigeerd_pct is not none %}{{ "{:.1f}".format(gender_pay_gap.gecorrigeerd_pct * 100) }}%{% else %}—{% endif %}
         </div>
         <div class="kpi-label">
-            Gecorrigeerde loonkloof (m/v)<span id="kpi-paygap-direction"></span>
+            Gecorrigeerde loonkloof (m/v)
             <span class="tooltip-icon" tabindex="0">?
-                <span class="tooltip-bubble" role="tooltip">Gecorrigeerd voor functie: per functietitel met zowel mannelijke als vrouwelijke medewerkers wordt het gemiddelde salarisverschil berekend, en die verschillen worden gewogen naar koppen samengevoegd. Een positief percentage betekent dat mannen gemiddeld meer verdienen dan vrouwen; een negatief percentage betekent dat vrouwen meer verdienen. Ongecorrigeerd (simpel gemiddelde m.v.): {{ '{:.1f}'.format(gender_pay_gap.ongecorrigeerd_pct * 100) if gender_pay_gap.ongecorrigeerd_pct is not none else '—' }}%. Gebaseerd op {{ gender_pay_gap.aantal_man }} mannelijke en {{ gender_pay_gap.aantal_vrouw }} vrouwelijke medewerkers over {{ gender_pay_gap.aantal_vergelijkbare_functies }} vergelijkbare functies.</span>
+                <span class="tooltip-bubble" role="tooltip">Gecorrigeerd voor functie: per functietitel met zowel mannelijke als vrouwelijke medewerkers wordt het gemiddelde salarisverschil berekend, en die verschillen worden gewogen naar koppen samengevoegd. Een positief percentage betekent dat mannen gemiddeld een hoger salaris hebben dan vrouwen; een negatief percentage betekent dat vrouwen gemiddeld een hoger salaris hebben. Ongecorrigeerd (simpel gemiddelde m.v.): {{ '{:.1f}'.format(gender_pay_gap.ongecorrigeerd_pct * 100) if gender_pay_gap.ongecorrigeerd_pct is not none else '—' }}%. Gebaseerd op {{ gender_pay_gap.aantal_man }} mannelijke en {{ gender_pay_gap.aantal_vrouw }} vrouwelijke medewerkers over {{ gender_pay_gap.aantal_vergelijkbare_functies }} vergelijkbare functies.</span>
             </span>
+            <span id="kpi-paygap-direction"></span>
         </div>
     </div>
 </div>
 
-<div class="grid-stack-item" gs-id="chart-distribution" gs-x="0" gs-y="19" gs-w="4" gs-h="5" gs-min-w="3">
+<div class="grid-stack-item" gs-id="chart-distribution" gs-x="8" gs-y="19" gs-w="4" gs-h="6" gs-min-w="3">
     <div class="grid-stack-item-content chart-card">
         <span class="tile-grip"></span>
         <h2>Spreiding salaris</h2>
@@ -162,7 +163,7 @@
     </div>
 </div>
 
-<div class="grid-stack-item" gs-id="chart-tenure" gs-x="4" gs-y="19" gs-w="4" gs-h="5" gs-min-w="3">
+<div class="grid-stack-item" gs-id="chart-tenure" gs-x="4" gs-y="19" gs-w="4" gs-h="6" gs-min-w="3">
     <div class="grid-stack-item-content chart-card">
         <span class="tile-grip"></span>
         <h2>Salaris versus dienstjaren</h2>
@@ -170,7 +171,7 @@
     </div>
 </div>
 
-<div class="grid-stack-item" gs-id="chart-comparatio" gs-x="8" gs-y="19" gs-w="4" gs-h="5" gs-min-w="3">
+<div class="grid-stack-item" gs-id="chart-comparatio" gs-x="4" gs-y="13" gs-w="4" gs-h="6" gs-min-w="3">
     <div class="grid-stack-item-content chart-card">
         <span class="tile-grip"></span>
         <h2>
@@ -183,7 +184,7 @@
     </div>
 </div>
 
-<div class="grid-stack-item" gs-id="chart-headcount" gs-x="6" gs-y="13" gs-w="6" gs-h="6" gs-min-w="5">
+<div class="grid-stack-item" gs-id="chart-headcount" gs-x="8" gs-y="13" gs-w="4" gs-h="6" gs-min-w="3">
     <div class="grid-stack-item-content chart-card">
         <span class="tile-grip"></span>
         <div class="dimension-switcher">
@@ -205,7 +206,7 @@
     </div>
 </div>
 
-<div class="grid-stack-item" gs-id="chart-benchmark" gs-x="0" gs-y="13" gs-w="6" gs-h="6" gs-min-w="5">
+<div class="grid-stack-item" gs-id="chart-benchmark" gs-x="0" gs-y="13" gs-w="4" gs-h="6" gs-min-w="3">
     <div class="grid-stack-item-content chart-card">
         <span class="tile-grip"></span>
         <div class="dimension-switcher">
@@ -232,7 +233,7 @@
     </div>
 </div>
 
-<div class="grid-stack-item" gs-id="chart-new-hire" gs-x="6" gs-y="6" gs-w="6" gs-h="7" gs-min-w="5">
+<div class="grid-stack-item" gs-id="chart-new-hire" gs-x="0" gs-y="19" gs-w="4" gs-h="6" gs-min-w="3">
     <div class="grid-stack-item-content chart-card">
         <span class="tile-grip"></span>
         <div class="dimension-switcher">
@@ -259,7 +260,7 @@
     </div>
 </div>
 
-<div class="grid-stack-item" gs-id="chart-lfl" gs-x="0" gs-y="24" gs-w="12" gs-h="6" gs-min-w="3">
+<div class="grid-stack-item" gs-id="chart-lfl" gs-x="6" gs-y="6" gs-w="6" gs-h="7" gs-min-w="3">
     <div class="grid-stack-item-content chart-card">
         <span class="tile-grip"></span>
         <div class="lfl-header">
@@ -519,7 +520,9 @@ function applyPaygapStyle(pct) {
     }
     const t = (Math.abs(pct) - PAYGAP_DEAD_ZONE) / (PAYGAP_CAP - PAYGAP_DEAD_ZONE);
     card.style.backgroundColor = mixHex("#ffffff", pct > 0 ? KPI_MANNEN : KPI_VROUWEN, t);
-    directionEl.textContent = pct > 0 ? "mannen verdienen meer" : "vrouwen verdienen meer";
+    directionEl.textContent = pct > 0
+        ? "mannen hebben gemiddeld een hoger salaris"
+        : "vrouwen hebben gemiddeld een hoger salaris";
 }
 
 // Server-berekende startwaarden — ook wat updateKpisForHighlight() teruggeeft
@@ -1126,7 +1129,7 @@ chatForm.addEventListener("submit", async (event) => {
 // hook it calls once `grid` actually exists, right before the very first
 // loadSavedLayout()/reflowGrid() pass, so these tiles are never part of
 // that first pass at all (not added-then-immediately-removed).
-const COLLAPSIBLE_TILE_IDS = ["chart-distribution", "chart-tenure", "chart-comparatio", "chart-new-hire"];
+const COLLAPSIBLE_TILE_IDS = ["chart-distribution", "chart-tenure", "chart-new-hire"];
 const MORE_ANALYSES_KEY = "salarisMoreAnalysesOpen";
 
 window.onGridReady = function (grid) {
