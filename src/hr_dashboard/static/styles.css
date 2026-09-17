@@ -56,6 +56,12 @@ body:has(.grid-stack) .app-header {
     font-weight: 600;
     font-size: 0.95rem;
     border-bottom: 3px solid transparent;
+    /* Reserved on every tab (transparent), same idea as the bottom border
+       — so only .active's color changes, never its box size, which would
+       otherwise shift every other tab sideways when the active one gains
+       a border. */
+    border-left: 1.5px solid transparent;
+    border-right: 1.5px solid transparent;
     border-radius: 8px 8px 0 0;
     transition: background 0.15s ease;
     white-space: nowrap;
@@ -73,6 +79,8 @@ body:has(.grid-stack) .app-header {
     background: var(--navy);
     color: var(--teal);
     border-bottom-color: var(--teal);
+    border-left-color: var(--teal);
+    border-right-color: var(--teal);
     font-size: 1.1rem;
     font-weight: 800;
 }
