@@ -109,12 +109,16 @@
             <div>
                 <h2 class="profile-name">{{ snapshot.Medewerker_Naam }}</h2>
                 <div class="profile-role">{{ snapshot.Functie_Naam }} — {{ snapshot.Afdeling_Naam }}</div>
+                {% set is_uit_dienst = identity.Datum_uitdienst and identity.Datum_uitdienst <= peildatum %}
                 <dl class="profile-fact-grid">
-                    <dt>Manager</dt><dd>{{ snapshot.Manager_Naam or "—" }}</dd>
-                    <dt>In dienst sinds</dt><dd>{{ identity.Aaneengesloten_Indienst_Datum }}</dd>
-                    <dt>Contract</dt><dd>{{ snapshot.Contracttype }}, {{ snapshot.Contracturen }} uur/week</dd>
                     <dt>Status</dt>
-                    <dd>{% if identity.Datum_uitdienst and identity.Datum_uitdienst <= peildatum %}Uit dienst{% else %}In dienst{% endif %}</dd>
+                    <dd>{% if is_uit_dienst %}Uit dienst{% else %}In dienst{% endif %}</dd>
+                    <dt>In dienst sinds</dt><dd>{{ identity.Aaneengesloten_Indienst_Datum }}</dd>
+                    {% if is_uit_dienst %}
+                    <dt>Uit dienst sinds</dt><dd>{{ identity.Datum_uitdienst }}</dd>
+                    {% endif %}
+                    <dt>Contract</dt><dd>{{ snapshot.Contracttype }}, {{ snapshot.Contracturen }} uur/week</dd>
+                    <dt>Manager</dt><dd>{{ snapshot.Manager_Naam or "—" }}</dd>
                     <dt>Salaris</dt>
                     <dd>€{{ "{:,.0f}".format(snapshot.Salaris).replace(",", ".") }}</dd>
                     <dt>Salaris t.o.v. benchmark</dt>
@@ -241,7 +245,14 @@ if (peerComparison && peerComparison.peer_count > 0) {
         vegaEmbed(`#${canvas.id}`, {
             $schema: "https://vega.github.io/schema/vega-lite/v6.json",
             width: "container", height: 70,
-            autosize: { type: "fit-x", contains: "padding" },
+            // "fit" (both dimensions), not "fit-x" — "fit-x" only makes
+            // WIDTH include the axis/padding chrome; height=70 was still
+            // being treated as the PLOT AREA alone, with the x-axis
+            // ticks/labels added on top of that, so the real rendered SVG
+            // came out taller than the CSS-constrained 70px container and
+            // visually bled into the next row's title. "fit" makes 70
+            // the TOTAL chart height (axes included), matching the CSS.
+            autosize: { type: "fit", contains: "padding" },
             data: {
                 values: [
                     { Wie: "Deze medewerker", Waarde: pair.employee },

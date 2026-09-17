@@ -211,13 +211,21 @@ def get_employee_history(employee_key: int) -> list[dict]:
     date shown on "Loopbaan" didn't match the database). Gebeurtenis_Datum
     below is the one column the timeline chart should actually plot
     events at; Startdatum/Einddatum stay in the result too since the
-    tooltip/text still want to show a real stint's boundaries."""
+    tooltip/text still want to show a real stint's boundaries.
+
+    Also carries Tevredenheid_Score_Bij_Uitdienst/
+    Betrokkenheid_Score_Bij_Uitdienst — only populated on the "Uit
+    dienst" row, a departing employee's satisfaction/engagement AT THE
+    MOMENT they left, for the AI summary (llm/profile.py) to use instead
+    of (or in addition to) their last periodic snapshot, which could be
+    a month or more stale by comparison."""
     with get_connection() as conn:
         cur = conn.cursor()
         cur.execute(
             """
             SELECT fe.Startdatum, fe.Einddatum, det.Gebeurtenis, fe.Salaris,
                    r.Functie_Naam, fe.Contracttype, dr.Vertrekreden,
+                   fe.Tevredenheid_Score_Bij_Uitdienst, fe.Betrokkenheid_Score_Bij_Uitdienst,
                    CASE WHEN det.Gebeurtenis = 'Uit dienst' THEN fe.Einddatum
                         ELSE fe.Startdatum END AS Gebeurtenis_Datum
             FROM dbo.fact_employment fe
@@ -417,3 +425,64 @@ def get_peer_group_averages(employee_key: int, afdeling: str, as_of_date: date) 
         if result["Prestatie_Score"] is not None:
             result["Prestatie_Score"] = result["Prestatie_Score"] * 2
         return result
+
+
+def get_employee_hr_context(employee_key: int) -> dict:
+    """The "why" behind the numbers, for the AI summary (llm/profile.py)
+    to weave in — not shown anywhere else on the page:
+
+    - The most recent performance/engagement/satisfaction DRIVER (which
+      single factor most influenced that score), from the latest
+      fact_workforce_snapshot row's own driver foreign keys.
+    - How they were hired: fact_recruitment carries Employee_Key
+      directly, so this is a plain lookup, not the old PBIP measure's
+      "match by Role_Key + closest Decision_Date" reconstruction — an
+      employee's own recruitment record is already known exactly.
+
+    Two small queries rather than one join: drivers come from
+    fact_workforce_snapshot (one row per employee per month),
+    recruitment context from fact_recruitment (one row per employee,
+    ever) — joining them would multiply one side by the other for no
+    reason."""
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT TOP 1
+                pd.Factor_Naam AS Performance_Driver,
+                ed.Factor_Naam AS Engagement_Driver,
+                sd.Factor_Naam AS Satisfaction_Driver
+            FROM dbo.fact_workforce_snapshot AS s
+            LEFT JOIN dbo.dim_performance_driver AS pd
+                ON pd.PerformanceDriver_Key = s.PerformanceDriver_Key
+            LEFT JOIN dbo.dim_engagement_driver AS ed
+                ON ed.EngagementDriver_Key = s.EngagementDriver_Key
+            LEFT JOIN dbo.dim_satisfaction_driver AS sd
+                ON sd.SatisfactionDriver_Key = s.SatisfactionDriver_Key
+            WHERE s.Employee_Key = ?
+            ORDER BY s.Snapshot_Date DESC
+            """,
+            (employee_key,),
+        )
+        row = cur.fetchone()
+        columns = [c[0] for c in cur.description]
+        context = dict(zip(columns, row)) if row else {}
+
+        cur.execute(
+            """
+            SELECT TOP 1 fr.Kandidaat_Kwaliteit, hs.Bron_Naam
+            FROM dbo.fact_recruitment AS fr
+            LEFT JOIN dbo.dim_hire_source AS hs ON hs.HireSource_Key = fr.HireSource_Key
+            WHERE fr.Employee_Key = ?
+            ORDER BY fr.Decision_Date DESC
+            """,
+            (employee_key,),
+        )
+        row = cur.fetchone()
+        if row:
+            columns = [c[0] for c in cur.description]
+            context.update(dict(zip(columns, row)))
+        else:
+            context["Kandidaat_Kwaliteit"] = None
+            context["Bron_Naam"] = None
+        return context

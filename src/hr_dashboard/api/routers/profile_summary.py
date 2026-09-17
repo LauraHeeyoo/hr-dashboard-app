@@ -24,9 +24,10 @@ def profiel_samenvatting(
         raise HTTPException(status_code=404, detail="Medewerker niet gevonden op deze peildatum.")
     identity = profile.get_employee_identity(employee_key)
     history = profile.get_employee_history(employee_key)
+    hr_context = profile.get_employee_hr_context(employee_key)
 
     try:
-        summary = generate_employee_summary(snapshot, identity, history)
+        summary = generate_employee_summary(snapshot, identity, history, hr_context)
     except Exception as exc:
         return {"summary": None, "error": f"Kon geen samenvatting genereren ({exc})."}
 
