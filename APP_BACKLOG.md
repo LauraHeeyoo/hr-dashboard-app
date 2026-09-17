@@ -126,12 +126,17 @@ timeline, and AI-generated summary. Since then, also shipped:
   year-over-year drop in performance or tevredenheid, and a recent
   verzuim average notably above the employee's own prior average. Empty
   list renders as "Geen bijzonderheden gevonden," not a forced result.
+- **Peer-group comparison** ("Vergelijking met peers") — five small,
+  independent 2-bar charts (Salaris, Performance, Tevredenheid,
+  Betrokkenheid, Verzuim) comparing this employee against the average of
+  every other employee in the same department, at the same peildatum.
+  Department only for now, not role — role-based peer comparison ("vs.
+  people in the same role") would be a straightforward variant of the
+  same `get_peer_group_averages` query (swap the department filter for a
+  role filter) if wanted later.
 
 Still open:
 
-- **Peer-group comparison** instead of (or alongside) the org-wide/self
-  comparisons currently shown — "vs. their own department" or "vs. people
-  in the same role."
 - Possibly gating the newer tiles behind a collapsible "Meer analyses"
   section (`dashboard_base.html`'s expand/collapse convention) if the page
   starts to feel overwhelming by default — not needed yet.
