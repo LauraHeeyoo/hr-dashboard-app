@@ -1,5 +1,6 @@
 :root {
     --navy: #1f2430;
+    --navy-light: #2b3245;
     --teal: #10bdc6;
     --page-bg: #f4f5f7;
     --card-bg: #ffffff;
@@ -18,7 +19,10 @@ body {
 }
 
 .app-header {
-    background: var(--navy);
+    /* Lighter than --navy (used for the active tab's own plate below) on
+       purpose — Laura: with both at the same shade, the active tab's
+       "permanent highlight" plate barely read as intentional. */
+    background: var(--navy-light);
     padding: 0 24px;
     display: flex;
     align-items: center;
@@ -57,14 +61,20 @@ body:has(.grid-stack) .app-header {
     white-space: nowrap;
 }
 
-.nav-tab:not(.disabled):hover {
+/* Not .active too — hovering the page you're already on isn't a
+   navigable affordance, so showing the same "you could click this" cue
+   there would be misleading (Laura). The active tab already has its own
+   permanent, stronger highlight below. */
+.nav-tab:not(.disabled):not(.active):hover {
     background: rgba(255, 255, 255, 0.14);
 }
 
 .nav-tab.active {
+    background: var(--navy);
     color: var(--teal);
     border-bottom-color: var(--teal);
     font-size: 1.1rem;
+    font-weight: 800;
 }
 
 /* Pages not built yet — same shape/hover-eligible position as a real tab
