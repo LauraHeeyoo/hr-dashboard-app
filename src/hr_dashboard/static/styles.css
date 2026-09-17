@@ -62,7 +62,13 @@ body:has(.grid-stack) .app-header {
        a border. */
     border-left: 1.5px solid transparent;
     border-right: 1.5px solid transparent;
-    border-radius: 8px 8px 0 0;
+    /* Square corners, deliberately — a rounded corner here tapers the
+       side border to a point where it meets the (borderless) top edge,
+       since a border-radius arc blends between whatever its two adjacent
+       sides are (Laura: "the lines curve toward the top" and it read as
+       unintentional at normal zoom). Scoped to .nav-tab only — every
+       other rounded control in the app (.btn, .dimension-pill, tiles)
+       keeps its own radius. */
     transition: background 0.15s ease;
     white-space: nowrap;
 }
