@@ -20,9 +20,10 @@ page is then keyed on.
 """
 
 from dataclasses import dataclass, fields, replace
-from datetime import date
+from datetime import date, timedelta
 
 from hr_dashboard.db.connection import get_connection
+from hr_dashboard.semantic import salary
 from hr_dashboard.semantic.common import rows_as_dicts
 
 # mcp.fn_workforce_snapshot_asof(@as_of_date, @afdeling, @functie, @manager,
@@ -217,16 +218,24 @@ def get_employee_history(employee_key: int) -> list[dict]:
 
 
 def get_employee_score_trend(employee_key: int) -> list[dict]:
-    """Performance/tevredenheid/betrokkenheid over time — periodic
+    """Performance/tevredenheid/betrokkenheid/verzuim over time — periodic
     fact_workforce_snapshot data (roughly monthly), a different grain from
     get_employee_history's fact_employment career events. "Loopbaan" layers
-    this on a second Y-axis alongside the (sparser) salary/event points,
-    sharing only the time axis, not the row grain."""
+    the three scores on their own panel and Verzuim_Werkdagen on another,
+    both sharing only the time axis with the (sparser) salary/event panel,
+    not the row grain.
+
+    Verzuim_Werkdagen (not Afwezige_Dagen) matches what the old Power BI
+    model's own absence measures used — sick-leave workdays specifically,
+    not every kind of absence (planned leave, public holidays, etc.). The
+    Verzuim page itself isn't built yet in this app; this is the first
+    place that column is read from here."""
     with get_connection() as conn:
         cur = conn.cursor()
         cur.execute(
             """
-            SELECT Snapshot_Date, Prestatie_Score, Tevredenheid_Score, Betrokkenheid_Score
+            SELECT Snapshot_Date, Prestatie_Score, Tevredenheid_Score, Betrokkenheid_Score,
+                   Verzuim_Werkdagen
             FROM dbo.fact_workforce_snapshot
             WHERE Employee_Key = ?
             ORDER BY Snapshot_Date
@@ -247,3 +256,79 @@ def get_employee_score_trend(employee_key: int) -> list[dict]:
             if row["Prestatie_Score"] is not None:
                 row["Prestatie_Score"] = row["Prestatie_Score"] * 2
         return rows
+
+
+def _value_about_a_year_before(score_trend: list[dict], field: str, latest_date: date):
+    """The score_trend row closest to exactly one year before latest_date
+    — None if nothing lands within ~2 months of that target (avoids
+    comparing against a snapshot that's actually 3+ years old just
+    because it happened to be the earliest one)."""
+    if not score_trend:
+        return None
+    target = latest_date - timedelta(days=365)
+    candidate = min(score_trend, key=lambda r: abs((r["Snapshot_Date"] - target).days))
+    if abs((candidate["Snapshot_Date"] - target).days) > 60:
+        return None
+    return candidate.get(field)
+
+
+def get_employee_signals(snapshot: dict, score_trend: list[dict]) -> list[str]:
+    """Plain-language, independently-checked observations for the
+    "Aandachtspunten" tile — deliberately NOT a composite/numeric "flight
+    risk" score (Laura's own proposal explicitly ruled that out: a manager
+    should see exactly which real number triggered each line, not just a
+    verdict). Every signal below states its own actual figures rather than
+    just firing a generic warning, and this returns an empty list rather
+    than "nothing to see here" text — the template decides how to word
+    the empty state."""
+    signals = []
+
+    benchmark_status = snapshot.get("Benchmark_Status")
+    benchmark_ratio = snapshot.get("Benchmark_Ratio")
+    if benchmark_status in salary.BENCHMARK_STATUS_ORDER[:2] and benchmark_ratio is not None:
+        signals.append(
+            f"Salaris zit ‘{benchmark_status}’ ({benchmark_ratio:.0%} van de "
+            "externe marktbenchmark)."
+        )
+
+    compa_ratio = snapshot.get("Compa_Ratio_Interne_Schaal")
+    if compa_ratio is not None and compa_ratio < 0.30:
+        signals.append(f"Positie in de eigen salarisschaal is laag ({compa_ratio:.0%}).")
+
+    if score_trend:
+        latest = score_trend[-1]
+        latest_date = latest["Snapshot_Date"]
+        score_fields = (("Prestatie_Score", "Performance"), ("Tevredenheid_Score", "Tevredenheid"))
+        for field, label in score_fields:
+            past_value = _value_about_a_year_before(score_trend, field, latest_date)
+            current_value = latest.get(field)
+            if past_value is not None and current_value is not None and current_value < past_value:
+                signals.append(
+                    f"{label} is het afgelopen jaar gedaald (van {past_value:.1f} "
+                    f"naar {current_value:.1f})."
+                )
+
+        def _verzuim_values(rows: list[dict]) -> list[float]:
+            # Verzuim_Werkdagen is a SQL DECIMAL column — pyodbc returns
+            # those as decimal.Decimal, which can't be mixed with a plain
+            # float in arithmetic (the `* 1.5` below), so cast here at the
+            # source rather than at every use site.
+            return [
+                float(r["Verzuim_Werkdagen"])
+                for r in rows
+                if r.get("Verzuim_Werkdagen") is not None
+            ]
+
+        recent_verzuim = _verzuim_values(score_trend[-3:])
+        earlier_verzuim = _verzuim_values(score_trend[:-3])
+        if recent_verzuim and earlier_verzuim:
+            recent_avg = sum(recent_verzuim) / len(recent_verzuim)
+            earlier_avg = sum(earlier_verzuim) / len(earlier_verzuim)
+            if earlier_avg > 0 and recent_avg > earlier_avg * 1.5:
+                signals.append(
+                    "Verzuim ligt de laatste maanden hoger dan gebruikelijk voor deze "
+                    f"medewerker ({recent_avg:.1f} dagen/maand recent vs. "
+                    f"{earlier_avg:.1f} gemiddeld)."
+                )
+
+    return signals

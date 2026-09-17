@@ -115,6 +115,8 @@
                     <dt>Contract</dt><dd>{{ snapshot.Contracttype }}, {{ snapshot.Contracturen }} uur/week</dd>
                     <dt>Status</dt>
                     <dd>{% if identity.Datum_uitdienst and identity.Datum_uitdienst <= peildatum %}Uit dienst{% else %}In dienst{% endif %}</dd>
+                    <dt>Salaris</dt>
+                    <dd>€{{ "{:,.0f}".format(snapshot.Salaris).replace(",", ".") }}</dd>
                     <dt>Salaris t.o.v. benchmark</dt>
                     <dd>{% if snapshot.Benchmark_Ratio is not none %}{{ "{:.0f}".format(snapshot.Benchmark_Ratio * 100) }}%{% else %}—{% endif %}</dd>
                     <dt>Compa-ratio (eigen schaal)</dt>
@@ -136,7 +138,23 @@
     </div>
 </div>
 
-<div class="grid-stack-item" gs-id="profile-timeline" gs-x="0" gs-y="10" gs-w="12" gs-h="8" gs-min-w="4">
+<div class="grid-stack-item" gs-id="profile-signals" gs-x="0" gs-y="10" gs-w="12" gs-h="4" gs-min-w="4">
+    <div class="grid-stack-item-content chart-card">
+        <span class="tile-grip"></span>
+        <h2>Aandachtspunten</h2>
+        {% if signals %}
+        <ul class="profile-signals-list">
+            {% for signal in signals %}
+            <li>{{ signal }}</li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="profile-empty-state">Geen bijzonderheden gevonden op basis van de huidige gegevens.</p>
+        {% endif %}
+    </div>
+</div>
+
+<div class="grid-stack-item" gs-id="profile-timeline" gs-x="0" gs-y="14" gs-w="12" gs-h="10" gs-min-w="4">
     <div class="grid-stack-item-content chart-card">
         <span class="tile-grip"></span>
         <h2>Loopbaan</h2>
@@ -275,7 +293,7 @@ if (historyEvents.length || scoreTrend.length) {
             // every point to do that.
             mark: { type: "line", opacity: 0.85, interpolate: "basis" },
             encoding: {
-                x: xEncoding("Snapshot_Date", true),
+                x: xEncoding("Snapshot_Date", false),
                 y: {
                     field: "Score_Waarde", type: "quantitative", title: "Score",
                     scale: { zero: true }, axis: { grid: false }
@@ -296,6 +314,29 @@ if (historyEvents.length || scoreTrend.length) {
                     { field: "Snapshot_Date", title: "Datum", type: "temporal" },
                     { field: "Score_Type", title: "Type" },
                     { field: "Score_Waarde", title: "Score", format: ".1f" }
+                ]
+            }
+        });
+
+        // Verzuim, its own panel below the scores — same scoreTrend rows
+        // (Verzuim_Werkdagen is fetched alongside the three scores), but a
+        // day-count, not a 0-10ish score, so it gets its own honestly-
+        // scaled panel rather than sharing the score axis. A bar mark
+        // instead of a line: this is a discrete "how many days that
+        // month," not a continuously varying measure.
+        views.push({
+            height: 90,
+            data: { values: scoreTrend },
+            mark: { type: "bar", color: "#c9a227" },
+            encoding: {
+                x: xEncoding("Snapshot_Date", true),
+                y: {
+                    field: "Verzuim_Werkdagen", type: "quantitative", title: "Verzuim (dagen)",
+                    scale: { zero: true }, axis: { grid: false }
+                },
+                tooltip: [
+                    { field: "Snapshot_Date", title: "Datum", type: "temporal" },
+                    { field: "Verzuim_Werkdagen", title: "Verzuimdagen", format: ".1f" }
                 ]
             }
         });
