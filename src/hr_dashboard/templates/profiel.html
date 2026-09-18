@@ -172,6 +172,10 @@
     <div class="grid-stack-item-content chart-card">
         <span class="tile-grip"></span>
         <h2>Loopbaan</h2>
+        <div class="profile-timeline-toggle" id="timeline-axis-toggle">
+            <button type="button" class="dimension-pill active" data-zero-baseline="true">Volledige as (vanaf 0)</button>
+            <button type="button" class="dimension-pill" data-zero-baseline="false">Ingezoomde as</button>
+        </div>
         <div class="chart-scroll">
             <div id="chart-timeline" class="chart-canvas" data-fixed-row-height></div>
         </div>
@@ -321,6 +325,17 @@ if (peerComparison && peerComparison.peer_count > 0) {
 }
 
 if (historyEvents.length || scoreTrend.length) {
+    // Rebuilt from scratch on each toggle click rather than pushed through
+    // a Vega runtime signal — the toggle only changes two panels' y-scale
+    // domain (plus their axis title, so the "zoomed in" state stays
+    // impossible to miss even without noticing the toggle itself, per
+    // Laura: "it needs to be really clear that they do not start at 0").
+    // A signal would need its own domain-recompute logic duplicated in
+    // JS; a full vegaEmbed re-call reuses the exact same spec-building
+    // code the initial render already needs, at the cost of one full
+    // re-render per click — a fine trade for a control a viewer clicks
+    // rarely, not on every interaction.
+    //
     // Two STACKED charts sharing only the time axis, not one chart with
     // two Y-axes. A dual-axis version of this was built first, but Laura
     // flagged it as hard to read — a well-known problem with dual-axis
@@ -357,8 +372,17 @@ if (historyEvents.length || scoreTrend.length) {
         };
     }
 
+    // zeroBaseline=false zooms both the Salaris and Score panels in on
+    // their own data range instead of forcing a 0 baseline — small raises/
+    // score changes are otherwise a couple of pixels of movement on an
+    // axis that spans a much bigger range than the data ever uses. The
+    // axis TITLE itself carries the "niet vanaf 0" callout rather than a
+    // separate badge/icon, so it's still visible even once a viewer stops
+    // paying attention to which toggle button is active.
+    function renderTimeline(zeroBaseline) {
     const views = [];
     if (historyEvents.length) {
+        const salarisTitle = zeroBaseline ? "Salaris (€)" : "Salaris (€) — as niet vanaf 0";
         views.push({
             height: 140,
             layer: [
@@ -367,7 +391,10 @@ if (historyEvents.length || scoreTrend.length) {
                     mark: { type: "line", color: "#d8d8d8" },
                     encoding: {
                         x: xEncoding("Gebeurtenis_Datum", !scoreTrend.length),
-                        y: { field: "Salaris", type: "quantitative", title: "Salaris (€)" },
+                        y: {
+                            field: "Salaris", type: "quantitative", title: salarisTitle,
+                            scale: { zero: zeroBaseline }
+                        },
                         order: { field: "Gebeurtenis_Datum" }
                     }
                 },
@@ -425,6 +452,7 @@ if (historyEvents.length || scoreTrend.length) {
     // — leaving the scale to fit whatever the data actually is keeps this
     // correct before and after that change, no code update needed either way.
     if (scoreTrend.length) {
+        const scoreTitle = zeroBaseline ? "Score" : "Score — as niet vanaf 0";
         views.push({
             height: 110,
             data: { values: scoreTrend },
@@ -447,8 +475,8 @@ if (historyEvents.length || scoreTrend.length) {
             encoding: {
                 x: xEncoding("Snapshot_Date", false),
                 y: {
-                    field: "Score_Waarde", type: "quantitative", title: "Score",
-                    scale: { zero: true }, axis: { grid: false }
+                    field: "Score_Waarde", type: "quantitative", title: scoreTitle,
+                    scale: { zero: zeroBaseline }, axis: { grid: false }
                 },
                 color: {
                     field: "Score_Type", type: "nominal", title: "Score",
@@ -526,6 +554,20 @@ if (historyEvents.length || scoreTrend.length) {
         // height, not a single auto-fit view, the same reasoning
         // chart-headcount/chart-benchmark already use on the Salaris page.
         document.getElementById("chart-timeline")._vegaView = result.view;
+    });
+    }
+
+    renderTimeline(true);
+
+    const timelineToggle = document.getElementById("timeline-axis-toggle");
+    const timelineToggleButtons = timelineToggle.querySelectorAll(".dimension-pill");
+    timelineToggleButtons.forEach((btn) => {
+        btn.addEventListener("click", () => {
+            if (btn.classList.contains("active")) return;
+            timelineToggleButtons.forEach((b) => b.classList.remove("active"));
+            btn.classList.add("active");
+            renderTimeline(btn.dataset.zeroBaseline === "true");
+        });
     });
 }
 

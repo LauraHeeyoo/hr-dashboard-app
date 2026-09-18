@@ -361,6 +361,17 @@ body:has(.grid-stack) .app-header {
     color: #fff;
 }
 
+/* A plain 2-button toggle, not the full .dimension-switcher component —
+   that one's built for an N-option switcher with a mobile pill/dropdown
+   fallback, more machinery than a fixed pair of states needs. Reuses
+   .dimension-pill's own look for visual consistency with the rest of the
+   app's "pick one of a group" styling. */
+.profile-timeline-toggle {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 10px;
+}
+
 /* The dimension-switcher's mobile stand-in for its row of pills — both
    markups are always in the DOM, only one visible at a time. Which one is
    a JS decision (dashboard_base.html), not a fixed pixel breakpoint: a
