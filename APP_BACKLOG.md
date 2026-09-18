@@ -147,7 +147,32 @@ qualification/diploma or safety-incident items the *old* Power BI
 project's own backlog had flagged (would need a data-availability check
 first — not confirmed to exist in this app's database yet).
 
-### 7. Profiel's charts don't auto-size within their tile
+### 7. Data-generator fix in progress — re-verify once the next full run lands
+
+Spotted on Faas Giselmeyer's own "Loopbaan" chart, then confirmed systemic
+by querying the live database directly: a departing employee's final
+`fact_employment` row (`Gebeurtenis = 'Uit dienst'`) very often has a
+different `Salaris` than the row before it, with no `Salarisaanpassing`
+(or other) event recording why — checked across the whole table, 131 of
+227 departures (58%) show this unexplained jump, while every OTHER event
+type's salary changes are consistently explained by that same row's own
+event (Promotie/Salarisaanpassing always change it, Locatietransfer never
+does). Root cause: the terminal row's one `Gebeurtenis` field is already
+"spent" recording the departure itself (which — per the Datum_uitdienst
+fix elsewhere in this backlog — actually describes that row's `Einddatum`,
+not its `Startdatum`), leaving no room to also record that something
+(probably a raise) happened at that same row's `Startdatum`.
+
+Laura is fixing this in the data-generation engine now: adding a new row
+where `Startdatum = Einddatum` when a person leaves, so the departure no
+longer overwrites/absorbs whatever event actually happened at that
+Startdatum. This is a data-engine change, not an app-code change — this
+app only reads the database. Once a full simulation run with the fix has
+landed, re-run the same check (compare each "Uit dienst" row's `Salaris`
+to the row before it, per employee) to confirm the gap is actually closed
+before considering this resolved.
+
+### 8. Profiel's charts don't auto-size within their tile
 
 Laura: "Grafieken auto-sizen nu niet binnen een tile" — the "Loopbaan"
 chart (and presumably any future Profiel chart) isn't resizing to fill its

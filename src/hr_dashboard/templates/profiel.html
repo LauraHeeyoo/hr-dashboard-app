@@ -201,7 +201,22 @@
 
 {% block dashboard_script %}
 {% if snapshot %}
-const historyEvents = {{ history_json | safe }};
+// Events before timeline_cutoff aren't hidden because they didn't
+// happen — they're hidden because the simulation itself has no career
+// events at all before this date (a burn-in period before event
+// generation started). A long-tenured employee's true hire date can
+// predate it by years; that fact stays correct and visible on the
+// identity card ("In dienst sinds"), this chart just has nothing to
+// plot before events started being generated — same idea as the score
+// panel already having nothing before 2020, just for a different
+// reason. profile.get_earliest_tracked_event_date() derives this from
+// the data (MIN(Einddatum) on fact_employment) rather than hardcoding
+// it, since a future simulation run could use a different start year
+// or burn-in length.
+const timelineCutoff = "{{ timeline_cutoff }}";
+const historyEvents = {{ history_json | safe }}.filter(
+    (e) => e.Gebeurtenis_Datum >= timelineCutoff
+);
 const scoreTrend = {{ score_trend_json | safe }};
 const peerComparison = {{ peer_comparison_json | safe }};
 
@@ -329,6 +344,44 @@ if (peerComparison && peerComparison.peer_count > 0) {
         '<p class="profile-empty-state">Geen collega’s in deze afdeling om mee te vergelijken.</p>';
 }
 
+// "Vergelijking met peers": every mini-chart here is only 70px tall, so
+// the tile's fixed gs-h="5" default is usually far more room than the
+// six of them actually need. Auto-fits the tile to its own real content
+// height instead of leaving it at that fixed guess — same technique
+// dashboard_base.html's filter-rail and expand-toggle logic already use
+// (temporarily let .chart-scroll size to its own natural content so the
+// true, unclipped height can be measured, then restore it) — just
+// applied continuously via a ResizeObserver instead of on a toggle
+// click, since this tile has no expand/collapse control of its own.
+(function () {
+    const peerGrid = document.getElementById("peer-comparison-grid");
+    const scrollWrap = peerGrid.closest(".chart-scroll");
+    const content = scrollWrap ? scrollWrap.closest(".grid-stack-item-content") : null;
+    const tile = scrollWrap ? scrollWrap.closest(".grid-stack-item") : null;
+    if (!scrollWrap || !content || !tile) return;
+    let lastH = null;
+    function fitHeight() {
+        const prevFlex = scrollWrap.style.flex;
+        const prevOverflow = scrollWrap.style.overflowY;
+        scrollWrap.style.flex = "0 0 auto";
+        scrollWrap.style.overflowY = "visible";
+        const contentPx = content.scrollHeight;
+        scrollWrap.style.flex = prevFlex;
+        scrollWrap.style.overflowY = prevOverflow;
+
+        const style = getComputedStyle(content);
+        const border = parseFloat(style.borderTopWidth) + parseFloat(style.borderBottomWidth);
+        const gridOverhead = grid.opts.margin * 2;
+        const neededH = Math.max(
+            1, Math.ceil((contentPx + border + gridOverhead) / grid.opts.cellHeight)
+        );
+        if (neededH === lastH) return;
+        lastH = neededH;
+        grid.update(tile, { h: neededH });
+    }
+    new ResizeObserver(fitHeight).observe(peerGrid);
+})();
+
 if (historyEvents.length || scoreTrend.length) {
     // Rebuilt from scratch on each toggle click rather than pushed through
     // a Vega runtime signal — the toggle only changes two panels' y-scale
@@ -435,7 +488,15 @@ if (historyEvents.length || scoreTrend.length) {
                     }
                 },
                 {
+                    // Salarisaanpassing is excluded from just this text-
+                    // label layer (not the point-marker layer above, and
+                    // not its tooltip) — it happens roughly yearly for
+                    // most employees, so its on-chart labels pile up and
+                    // overlap. The marker still shows (colored by the
+                    // same Gebeurtenis scale) and still explains itself
+                    // on hover; it just doesn't get a permanent caption.
                     data: { values: historyEvents },
+                    transform: [{ filter: "datum.Gebeurtenis !== 'Salarisaanpassing'" }],
                     mark: { type: "text", dy: -14, fontSize: 10, color: "#1f2430" },
                     encoding: {
                         x: { field: "Gebeurtenis_Datum", type: "temporal" },

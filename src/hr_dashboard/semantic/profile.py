@@ -263,6 +263,28 @@ def get_employee_engagement_band(employee_key: int, as_of_date: date) -> str | N
         return row[0] if row else None
 
 
+def get_earliest_tracked_event_date() -> date:
+    """The date "Loopbaan"'s salary/events panel treats as its own
+    x=0 — same "derive it from the data, never hardcode a simulation
+    parameter" rule salary.get_earliest_snapshot_date already follows.
+
+    MIN(Einddatum), not MIN(Startdatum): a burn-in employee's true hire
+    date (their first fact_employment row's Startdatum) can predate the
+    simulation's own event-generation window by years — Laura's own
+    example, a 2-year burn-in before events start — so MIN(Startdatum)
+    would just surface that old hire date and defeat the purpose. Only
+    once a row's stint actually ENDS (something happens, so a new row
+    starts) does Einddatum get set, and burn-in rows only get an
+    Einddatum once the first real, generated event ends them — so
+    MIN(Einddatum) lands at (or right after) whenever the simulation
+    actually started generating events, which is exactly the cutoff
+    the chart wants."""
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT MIN(Einddatum) FROM dbo.fact_employment")
+        return cur.fetchone()[0]
+
+
 def get_employee_history(employee_key: int) -> list[dict]:
     """Career events (hire, promotion, transfer, salary change, contract
     change, departure, ...), oldest first — computed directly from
@@ -615,12 +637,8 @@ def _maand_jaar(d: date) -> str:
     return f"{_MAAND_NAMEN[d.month - 1]} {d.year}"
 
 
-def _join_and(items: list[str]) -> str:
-    """Dutch list join — comma-separated, "en" (not ", en") before the
-    last item, no Oxford comma."""
-    if len(items) == 1:
-        return items[0]
-    return ", ".join(items[:-1]) + " en " + items[-1]
+def _volledige_datum(d: date) -> str:
+    return f"{d.day} {_MAAND_NAMEN[d.month - 1]} {d.year}"
 
 
 def _next_occurrence(month: int, day: int, on_or_after: date) -> date:
@@ -639,13 +657,14 @@ def _next_occurrence(month: int, day: int, on_or_after: date) -> date:
     raise AssertionError("unreachable — the second year always qualifies")
 
 
-def _latest_transfer_description(history: list[dict]) -> str | None:
+def _latest_transfer_description(history: list[dict], single: bool) -> str | None:
     """Describes the most recent Transfer's actual before/after — a
     Transfer does NOT always mean the department changed (confirmed
     live: some are a same-department role change, e.g. Supply Chain
     Planner -> Inkoper within Logistiek), so this only names the
     department when it's actually different, rather than assuming it
-    always is."""
+    always is. `single` picks "Deze transfer" (there's only the one) vs
+    "De laatste transfer" (one of several)."""
     transfer_indices = [
         i for i, e in enumerate(history) if e["Gebeurtenis"] == _TRANSFER and i > 0
     ]
@@ -653,42 +672,71 @@ def _latest_transfer_description(history: list[dict]) -> str | None:
         return None
     i = transfer_indices[-1]
     old, new = history[i - 1], history[i]
+    lead = "Deze transfer was" if single else "De laatste transfer was"
     if old["Afdeling_Naam"] == new["Afdeling_Naam"]:
         return (
-            f"De laatste transfer was van {old['Functie_Naam']} naar {new['Functie_Naam']} "
+            f"{lead} van {old['Functie_Naam']} naar {new['Functie_Naam']} "
             f"(beide binnen {new['Afdeling_Naam']})."
         )
     return (
-        f"De laatste transfer was van {old['Functie_Naam']} ({old['Afdeling_Naam']}) naar "
+        f"{lead} van {old['Functie_Naam']} ({old['Afdeling_Naam']}) naar "
         f"{new['Functie_Naam']} ({new['Afdeling_Naam']})."
     )
 
 
-def _career_trajectory_bullet(naam: str, history: list[dict]) -> str | None:
-    promotie_count = sum(1 for e in history if e["Gebeurtenis"] == _PROMOTIE)
-    transfer_count = sum(1 for e in history if e["Gebeurtenis"] == _TRANSFER)
-    contract_vast = any(e["Gebeurtenis"] == _CONTRACT_VAST for e in history)
-
-    counted = []
-    if promotie_count:
-        counted.append(f"{promotie_count} keer een promotie")
-    if transfer_count:
-        counted.append(f"{transfer_count} keer een transfer")
-
-    if not counted and not contract_vast:
+def _promotion_bullet(naam: str, history: list[dict]) -> str | None:
+    """No department in the description, unlike transfers — confirmed
+    live: 0 of 26 promotions in this data involve a department change,
+    so there's nothing to conditionally mention."""
+    promotie_indices = [
+        i for i, e in enumerate(history) if e["Gebeurtenis"] == _PROMOTIE and i > 0
+    ]
+    if not promotie_indices:
         return None
+    count = len(promotie_indices)
+    i = promotie_indices[-1]
+    old, new = history[i - 1], history[i]
+    lead = "Deze promotie was" if count == 1 else "De laatste promotie was"
+    return (
+        f"Sinds indiensttreding heeft {naam} {count} keer een promotie gehad. "
+        f"{lead} van {old['Functie_Naam']} naar {new['Functie_Naam']}."
+    )
 
-    if counted:
-        sentence = f"Sinds indiensttreding heeft {naam} {_join_and(counted)} gehad"
-        sentence += ", en is overgegaan naar een vast contract." if contract_vast else "."
-    else:
-        sentence = f"Sinds indiensttreding is {naam} overgegaan naar een vast contract."
 
-    if transfer_count:
-        transfer_detail = _latest_transfer_description(history)
-        if transfer_detail:
-            sentence += f" {transfer_detail}"
+def _transfer_bullet(naam: str, history: list[dict]) -> str | None:
+    transfer_count = sum(1 for e in history if e["Gebeurtenis"] == _TRANSFER)
+    if not transfer_count:
+        return None
+    detail = _latest_transfer_description(history, single=transfer_count == 1)
+    sentence = f"Sinds indiensttreding heeft {naam} {transfer_count} keer een transfer gehad."
+    if detail:
+        sentence += f" {detail}"
     return sentence
+
+
+def _contract_vast_datum(history: list[dict]) -> date | None:
+    row = next((e for e in history if e["Gebeurtenis"] == _CONTRACT_VAST), None)
+    return row["Gebeurtenis_Datum"] if row else None
+
+
+def _score_clause(satisfaction_driver: str, engagement_driver: str, *, lead_in: bool) -> str:
+    """The tevredenheid+betrokkenheid half of the driver bullet. Two
+    forms depending on where it lands: `lead_in=True` continues directly
+    after "Op basis van het laatste meetmoment" (needs Dutch verb-second
+    word order, so the verb comes right after that fronted phrase, not
+    the subject) — used when there's no performance sentence in front of
+    it. `lead_in=False` is its own sentence starting with the subject
+    ("Tevredenheid werd..."), following the performance sentence's own
+    period."""
+    if lead_in:
+        return (
+            f'werd tevredenheid vooral beïnvloed door "{satisfaction_driver}", en '
+            f'"{engagement_driver}" was de belangrijkste factor voor betrokkenheid'
+        )
+    return (
+        f'Tevredenheid werd vooral beïnvloed door "{satisfaction_driver}", en '
+        f'"{engagement_driver}" was de belangrijkste factor voor betrokkenheid'
+    )
 
 
 def build_employee_summary(
@@ -707,14 +755,22 @@ def build_employee_summary(
     Each bullet is its own list entry (rendered as one <li> each) and
     omitted entirely when its data doesn't apply — matching
     get_employee_signals' own "omit rather than force a result"
-    convention, e.g. an employee with zero promotions/transfers gets no
-    career-trajectory bullet rather than one saying "0 promoties.\""""
-    naam = snapshot["Medewerker_Naam"]
+    convention, e.g. an employee with zero promotions gets no promotion
+    bullet rather than one saying "0 promoties."
+
+    Uses only the employee's FIRST name throughout (identity['Voornaam'],
+    not snapshot's full Medewerker_Naam) — Laura's call: the full name is
+    already right there on the identity card, and every sentence here
+    was already written to avoid a pronoun (so it doesn't need to know
+    the employee's gender), so the full name every time would be more
+    repetition than the summary needs."""
+    naam = identity["Voornaam"]
     role = snapshot["Functie_Naam"]
     is_departed = (
         identity["Datum_uitdienst"] is not None and identity["Datum_uitdienst"] <= peildatum
     )
     departure_row = next((e for e in history if e["Gebeurtenis"] == "Uit dienst"), None)
+    contract_vast_datum = _contract_vast_datum(history)
 
     bullets = []
 
@@ -724,14 +780,25 @@ def build_employee_summary(
             f"{_maand_jaar(identity['Aaneengesloten_Indienst_Datum'])} tot "
             f"{_maand_jaar(departure_row['Gebeurtenis_Datum'])}."
         )
+        if contract_vast_datum:
+            opening += (
+                f" {naam} is op {_volledige_datum(contract_vast_datum)} "
+                "overgegaan naar een vast contract."
+            )
         if departure_row.get("Vertrekreden"):
             opening += f" De reden van vertrek: {departure_row['Vertrekreden']}."
         bullets.append(opening)
     else:
-        bullets.append(
+        opening = (
             f"{naam} is {role} en is in dienst sinds "
             f"{_maand_jaar(identity['Aaneengesloten_Indienst_Datum'])}."
         )
+        if contract_vast_datum:
+            opening += (
+                f" {naam} is op {_volledige_datum(contract_vast_datum)} "
+                "overgegaan naar een vast contract."
+            )
+        bullets.append(opening)
 
     if identity.get("Bijzondere_Aanstelling"):
         werkwoord = "had" if is_departed else "heeft"
@@ -739,25 +806,40 @@ def build_employee_summary(
             f"{naam} {werkwoord} een bijzondere aanstelling: {identity['Bijzondere_Aanstelling']}."
         )
 
-    trajectory = _career_trajectory_bullet(naam, history)
-    if trajectory:
-        bullets.append(trajectory)
+    promotion = _promotion_bullet(naam, history)
+    if promotion:
+        bullets.append(promotion)
+    transfer = _transfer_bullet(naam, history)
+    if transfer:
+        bullets.append(transfer)
 
-    driver_parts = []
-    if hr_context.get("Performance_Driver"):
-        driver_parts.append(
-            f"was {hr_context['Performance_Driver']} de belangrijkste driver voor performance"
+    # Fixed 3-part structure (not a generic join over however many drivers
+    # happen to be present) — performance gets its own sentence,
+    # tevredenheid+betrokkenheid share one, matching Laura's own example
+    # phrasing rather than templating all three identically. Confirmed
+    # live that Satisfaction_Driver/Engagement_Driver are never
+    # independently null (always both set or both absent), so there's no
+    # partial case to handle for that second sentence.
+    performance_driver = hr_context.get("Performance_Driver")
+    satisfaction_driver = hr_context.get("Satisfaction_Driver")
+    engagement_driver = hr_context.get("Engagement_Driver")
+    performance_sentence = (
+        f'was "{performance_driver}" de belangrijkste driver voor performance'
+        if performance_driver
+        else None
+    )
+    if performance_sentence and satisfaction_driver and engagement_driver:
+        bullets.append(
+            f"Op basis van het laatste meetmoment {performance_sentence}. "
+            f"{_score_clause(satisfaction_driver, engagement_driver, lead_in=False)}."
         )
-    if hr_context.get("Satisfaction_Driver"):
-        driver_parts.append(
-            f"werd tevredenheid vooral beïnvloed door {hr_context['Satisfaction_Driver']}"
+    elif performance_sentence:
+        bullets.append(f"Op basis van het laatste meetmoment {performance_sentence}.")
+    elif satisfaction_driver and engagement_driver:
+        bullets.append(
+            "Op basis van het laatste meetmoment "
+            f"{_score_clause(satisfaction_driver, engagement_driver, lead_in=True)}."
         )
-    if hr_context.get("Engagement_Driver"):
-        driver_parts.append(
-            f"was {hr_context['Engagement_Driver']} de belangrijkste factor voor betrokkenheid"
-        )
-    if driver_parts:
-        bullets.append(f"Op basis van het laatste meetmoment {_join_and(driver_parts)}.")
 
     hiring_source = hr_context.get("Bron_Naam")
     candidate_quality = hr_context.get("Kandidaat_Kwaliteit")

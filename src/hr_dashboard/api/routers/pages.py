@@ -305,6 +305,7 @@ def profiel_page(
     summary: list[str] = []
     engagement_band: str | None = None
     peer_averages: dict | None = None
+    timeline_cutoff: date | None = None
     if employee_key_int is not None:
         snapshot = profile.get_employee_snapshot(employee_key_int, peildatum)
         if snapshot is not None:
@@ -317,6 +318,7 @@ def profiel_page(
                 snapshot, identity, history, hr_context, peildatum
             )
             engagement_band = profile.get_employee_engagement_band(employee_key_int, peildatum)
+            timeline_cutoff = profile.get_earliest_tracked_event_date()
             peer_averages = profile.get_peer_group_averages(
                 employee_key_int, snapshot["Afdeling_Naam"], peildatum
             )
@@ -365,6 +367,7 @@ def profiel_page(
             "signals": signals,
             "summary": summary,
             "engagement_band": engagement_band,
+            "timeline_cutoff": timeline_cutoff,
             "peer_comparison_json": json.dumps(peer_comparison, default=_json_default),
             "clear_filters_url": "/profiel?" + "&".join(
                 f"{k}={v}" for k, v in clear_filters_params.items()
