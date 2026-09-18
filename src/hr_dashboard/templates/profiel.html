@@ -133,19 +133,11 @@
     </div>
 </div>
 
-<div class="grid-stack-item" gs-id="profile-summary" gs-x="0" gs-y="6" gs-w="12" gs-h="4" gs-min-w="4">
+<div class="grid-stack-item" gs-id="profile-summary" gs-x="0" gs-y="6" gs-w="12" gs-h="8" gs-min-w="4">
     <div class="grid-stack-item-content chart-card">
         <span class="tile-grip"></span>
-        <h2>AI-samenvatting</h2>
-        <button type="button" class="btn btn-secondary" id="generate-summary-btn">Genereer samenvatting</button>
-        <div id="summary-result" class="profile-summary-text"></div>
-    </div>
-</div>
-
-<div class="grid-stack-item" gs-id="profile-signals" gs-x="0" gs-y="10" gs-w="12" gs-h="4" gs-min-w="4">
-    <div class="grid-stack-item-content chart-card">
-        <span class="tile-grip"></span>
-        <h2>Aandachtspunten</h2>
+        <h2>Aandachtspunten &amp; AI-samenvatting</h2>
+        <h3 class="profile-subheading">Aandachtspunten</h3>
         {% if signals %}
         <ul class="profile-signals-list">
             {% for signal in signals %}
@@ -155,6 +147,9 @@
         {% else %}
         <p class="profile-empty-state">Geen bijzonderheden gevonden op basis van de huidige gegevens.</p>
         {% endif %}
+        <h3 class="profile-subheading">AI-samenvatting</h3>
+        <button type="button" class="btn btn-secondary" id="generate-summary-btn">Genereer samenvatting</button>
+        <div id="summary-result" class="profile-summary-text"></div>
     </div>
 </div>
 

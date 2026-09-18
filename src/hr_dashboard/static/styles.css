@@ -833,6 +833,20 @@ body:has(.grid-stack) .app-header {
     color: var(--text);
 }
 
+/* A sub-section label inside a tile that stacks more than one thing under
+   one h2 (Aandachtspunten + AI-samenvatting share a tile) — smaller than
+   the tile's own h2, with enough top margin to read as a new section
+   rather than a continuation of whatever came before it. */
+.profile-subheading {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    margin: 16px 0 6px;
+}
+
+.profile-subheading:first-of-type {
+    margin-top: 0;
+}
+
 .page-title-count {
     color: var(--text-muted);
     font-weight: 400;
