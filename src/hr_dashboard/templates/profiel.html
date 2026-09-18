@@ -177,7 +177,7 @@
             <button type="button" class="dimension-pill" data-zero-baseline="false">Ingezoomde as</button>
         </div>
         <div class="chart-scroll">
-            <div id="chart-timeline" class="chart-canvas" data-fixed-row-height></div>
+            <div id="chart-timeline" class="chart-canvas" data-fixed-row-height data-no-expand-toggle></div>
         </div>
     </div>
 </div>
@@ -257,15 +257,11 @@ if (peerComparison && peerComparison.peer_count > 0) {
         const title = document.createElement("div");
         title.className = "profile-peer-item-title";
         title.textContent = label;
-        const desc = document.createElement("p");
-        desc.className = "profile-peer-item-desc";
-        desc.textContent = description;
         const canvas = document.createElement("div");
         canvas.id = `peer-chart-${key}`;
         canvas.className = "chart-canvas";
         canvas.setAttribute("data-fixed-row-height", "");
         item.appendChild(title);
-        item.appendChild(desc);
         item.appendChild(canvas);
         grid.appendChild(item);
 
@@ -290,9 +286,15 @@ if (peerComparison && peerComparison.peer_count > 0) {
             // the TOTAL chart height (axes included), matching the CSS.
             autosize: { type: "fit", contains: "padding" },
             data: {
+                // Omschrijving is the same fixed sentence on both rows —
+                // carried as a plain data field (not a `calculate`
+                // transform on a hardcoded string) so there's no
+                // expression-string escaping to get wrong, matching how
+                // every other per-row value here is just passed straight
+                // through from `pair`.
                 values: [
-                    { Wie: "Deze medewerker", Waarde: pair.employee },
-                    { Wie: "Afdeling", Waarde: pair.peer }
+                    { Wie: "Deze medewerker", Waarde: pair.employee, Omschrijving: description },
+                    { Wie: "Afdeling", Waarde: pair.peer, Omschrijving: description }
                 ]
             },
             transform: currency
@@ -311,7 +313,8 @@ if (peerComparison && peerComparison.peer_count > 0) {
                 },
                 tooltip: [
                     { field: "Wie", title: "Wie" },
-                    tooltipValueField
+                    tooltipValueField,
+                    { field: "Omschrijving", type: "nominal", title: "Toelichting" }
                 ]
             },
             config: { view: { stroke: null } }

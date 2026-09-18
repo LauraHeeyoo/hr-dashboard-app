@@ -476,6 +476,14 @@ document.querySelectorAll(".filter-rail").forEach((rail) => {
 // selected (itself not persisted, just a query param), so resetting on
 // every load fits.
 document.querySelectorAll(".chart-scroll > .chart-canvas[data-fixed-row-height]").forEach((canvas) => {
+    // Opt-out for a chart that uses .chart-scroll/data-fixed-row-height
+    // for the OTHER reason this same combo exists (letting a fixed-height
+    // spec overflow-scroll instead of forcing gridstack row growth) but
+    // isn't itself a dimension-driven chart whose row count can grow —
+    // Profiel's "Loopbaan" vconcat is a fixed set of panels, never more
+    // rows just because a different dimension got picked, so there's
+    // nothing here for "Volledig weergeven" to usefully expand into.
+    if (canvas.hasAttribute("data-no-expand-toggle")) return;
     const scrollWrap = canvas.closest(".chart-scroll");
     const content = scrollWrap.closest(".grid-stack-item-content");
     const tile = scrollWrap.closest(".grid-stack-item");
