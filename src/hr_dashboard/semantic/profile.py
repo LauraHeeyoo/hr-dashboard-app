@@ -48,6 +48,31 @@ FILTER_FIELD_COLUMNS: dict[str, str] = {
 # old dim_employee[Performance Bin] DAX column: 0.5-wide bins) — an
 # alphabetical sort would put "< 3.0" after "4.5 - 5.0".
 PERFORMANCE_BIN_ORDER: list[str] = ["< 3.0", "3.0 - 3.5", "3.5 - 4.0", "4.0 - 4.5", "4.5 - 5.0"]
+
+# mcp.fn_workforce_snapshot_asof computes Performance_Bin from the raw,
+# un-doubled Prestatie_Score column — everywhere on this page the SCORE
+# itself is shown doubled onto a 0-10 scale (see get_employee_score_trend's
+# docstring), the BAND needs the same doubling applied for display, or a
+# doubled score of e.g. 7.5 would appear next to an un-doubled band like
+# "3.5 - 4.0" instead of the matching "7.0 - 8.0". Only a display-layer
+# relabeling — filtering (_snapshot_sql) still matches on the raw string.
+PERFORMANCE_BIN_DOUBLED: dict[str, str] = {
+    "< 3.0": "< 6.0",
+    "3.0 - 3.5": "6.0 - 7.0",
+    "3.5 - 4.0": "7.0 - 8.0",
+    "4.0 - 4.5": "8.0 - 9.0",
+    "4.5 - 5.0": "9.0 - 10.0",
+}
+
+
+def double_performance_bin(bin_value: str | None) -> str | None:
+    """Maps a raw Performance_Bin (as mcp.fn_workforce_snapshot_asof
+    computes it) onto its doubled-scale display label. Falls back to the
+    raw value unchanged for any bin not in the map, rather than raising —
+    display code should never hard-fail over a labeling gap."""
+    if bin_value is None:
+        return None
+    return PERFORMANCE_BIN_DOUBLED.get(bin_value, bin_value)
 # dim_satisfaction_band's own SatisfactionBand_Key order (confirmed via a
 # live query — not every one of these 5 necessarily appears in the data,
 # but the sort should still be correct if they do).
@@ -165,7 +190,13 @@ def get_employee_snapshot(employee_key: int, as_of_date: date) -> dict | None:
         if row is None:
             return None
         columns = [c[0] for c in cur.description]
-        return dict(zip(columns, row))
+        result = dict(zip(columns, row))
+        # Doubled here at the source (not per-caller) so every consumer of
+        # this snapshot — the identity card and the AI summary alike —
+        # automatically sees a band that matches the doubled score shown
+        # alongside it. See PERFORMANCE_BIN_DOUBLED above for why.
+        result["Performance_Bin"] = double_performance_bin(result["Performance_Bin"])
+        return result
 
 
 def get_employee_identity(employee_key: int) -> dict | None:

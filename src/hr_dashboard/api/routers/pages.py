@@ -287,6 +287,12 @@ def profiel_page(
 
     filter_options = profile.get_profile_filter_options(peildatum, filters)
     narrowed_employees = profile.get_narrowed_employees(peildatum, filters)
+    # The dropdown still filters on the raw Performance_Bin value (matching
+    # what mcp.fn_workforce_snapshot_asof stores), but shows the doubled
+    # label — same reasoning as get_employee_snapshot's own doubling.
+    performance_bin_labels = {
+        opt: profile.double_performance_bin(opt) for opt in filter_options["performance"]
+    }
 
     # A selected employee is looked up regardless of whether they still
     # match the CURRENT rail filters — the rail is a search aid for
@@ -342,6 +348,7 @@ def profiel_page(
             "last_refresh": _last_refresh_label(),
             "filters": filters,
             "filter_options": filter_options,
+            "performance_bin_labels": performance_bin_labels,
             "narrowed_employees": narrowed_employees,
             "employee_key": employee_key_int,
             "snapshot": snapshot,

@@ -60,7 +60,7 @@
                 <select id="performance" name="performance">
                     <option value="">Alle</option>
                     {% for opt in filter_options.performance %}
-                    <option value="{{ opt }}" {% if filters.performance == opt %}selected{% endif %}>{{ opt }}</option>
+                    <option value="{{ opt }}" {% if filters.performance == opt %}selected{% endif %}>{{ performance_bin_labels.get(opt, opt) }}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -213,17 +213,36 @@ const peerComparison = {{ peer_comparison_json | safe }};
 // lives in the label instead, and the axis/tooltip format stays a plain
 // number.
 const PEER_METRICS = [
-    { key: "Salaris", label: "Salaris (€)", format: ",.0f" },
-    { key: "Prestatie_Score", label: "Performance", format: ".1f" },
-    { key: "Tevredenheid_Score", label: "Tevredenheid", format: ".1f" },
-    { key: "Betrokkenheid_Score", label: "Betrokkenheid", format: ".1f" },
-    { key: "Verzuim_Werkdagen", label: "Verzuim (dagen)", format: ".1f" },
-    { key: "Compa_Ratio_Interne_Schaal", label: "Compa-ratio", format: ".0%" }
+    {
+        key: "Salaris", label: "Salaris (€)", format: ",.0f", xTitle: "Salaris (€)",
+        currency: true,
+        description: "Het salaris van deze medewerker vergeleken met het gemiddelde salaris binnen de afdeling."
+    },
+    {
+        key: "Prestatie_Score", label: "Performance", format: ".1f", xTitle: "Score",
+        description: "De performance-score van deze medewerker vergeleken met het afdelingsgemiddelde."
+    },
+    {
+        key: "Tevredenheid_Score", label: "Tevredenheid", format: ".1f", xTitle: "Score",
+        description: "De tevredenheidsscore van deze medewerker vergeleken met het afdelingsgemiddelde."
+    },
+    {
+        key: "Betrokkenheid_Score", label: "Betrokkenheid", format: ".1f", xTitle: "Score",
+        description: "De betrokkenheidsscore van deze medewerker vergeleken met het afdelingsgemiddelde."
+    },
+    {
+        key: "Verzuim_Werkdagen", label: "Verzuim (dagen)", format: ".1f", xTitle: "Dagen",
+        description: "Het aantal verzuimdagen van deze medewerker vergeleken met het afdelingsgemiddelde."
+    },
+    {
+        key: "Compa_Ratio_Interne_Schaal", label: "Compa-ratio", format: ".0%", xTitle: "Procent",
+        description: "De positie van deze medewerker in de eigen salarisschaal (compa-ratio) vergeleken met het afdelingsgemiddelde."
+    }
 ];
 
 if (peerComparison && peerComparison.peer_count > 0) {
     const grid = document.getElementById("peer-comparison-grid");
-    PEER_METRICS.forEach(({ key, label, format }) => {
+    PEER_METRICS.forEach(({ key, label, format, xTitle, currency, description }) => {
         const pair = peerComparison[key];
         if (!pair || pair.employee === null || pair.employee === undefined
             || pair.peer === null || pair.peer === undefined) {
@@ -234,13 +253,26 @@ if (peerComparison && peerComparison.peer_count > 0) {
         const title = document.createElement("div");
         title.className = "profile-peer-item-title";
         title.textContent = label;
+        const desc = document.createElement("p");
+        desc.className = "profile-peer-item-desc";
+        desc.textContent = description;
         const canvas = document.createElement("div");
         canvas.id = `peer-chart-${key}`;
         canvas.className = "chart-canvas";
         canvas.setAttribute("data-fixed-row-height", "");
         item.appendChild(title);
+        item.appendChild(desc);
         item.appendChild(canvas);
         grid.appendChild(item);
+
+        // d3-format (what Vega-Lite's `format` actually uses, see the
+        // comment above this array) still can't put a literal € in front
+        // of a number — so the salary tooltip instead gets its own
+        // pre-formatted string field via a `calculate` transform, shown
+        // as a nominal tooltip value instead of a formatted number.
+        const tooltipValueField = currency
+            ? { field: "Waarde_Label", type: "nominal", title: "Waarde" }
+            : { field: "Waarde", title: "Waarde", format };
 
         vegaEmbed(`#${canvas.id}`, {
             $schema: "https://vega.github.io/schema/vega-lite/v6.json",
@@ -259,20 +291,23 @@ if (peerComparison && peerComparison.peer_count > 0) {
                     { Wie: "Afdeling", Waarde: pair.peer }
                 ]
             },
+            transform: currency
+                ? [{ calculate: "'€ ' + format(datum.Waarde, ',.0f')", as: "Waarde_Label" }]
+                : [],
             mark: "bar",
             encoding: {
                 y: {
                     field: "Wie", type: "nominal", title: null,
                     sort: ["Deze medewerker", "Afdeling"], axis: { labelLimit: 90 }
                 },
-                x: { field: "Waarde", type: "quantitative", title: null, axis: { format } },
+                x: { field: "Waarde", type: "quantitative", title: xTitle, axis: { format } },
                 color: {
                     field: "Wie", type: "nominal", legend: null,
                     scale: { domain: ["Deze medewerker", "Afdeling"], range: ["#10bdc6", "#c9c9c9"] }
                 },
                 tooltip: [
                     { field: "Wie", title: "Wie" },
-                    { field: "Waarde", title: "Waarde", format }
+                    tooltipValueField
                 ]
             },
             config: { view: { stroke: null } }
