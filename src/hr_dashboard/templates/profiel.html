@@ -451,49 +451,107 @@ if (historyEvents.length || scoreTrend.length) {
     // correct before and after that change, no code update needed either way.
     if (scoreTrend.length) {
         const scoreTitle = zeroBaseline ? "Score" : "Score — as niet vanaf 0";
+        // Score_Label replaces the raw fold-produced Score_Type
+        // ("Prestatie_Score" etc.) everywhere it'd otherwise be user-
+        // visible — the color legend used to need its own labelExpr hack
+        // to show "Performance" instead of that raw column name; now the
+        // tooltip's "Type" field gets the same clean label for free too,
+        // from one shared calculate instead of two separate workarounds.
+        //
+        // Driver picks whichever of the three per-row driver columns
+        // matches this melted row's own Score_Type — get_employee_score_
+        // trend now joins in all three (see its own docstring), one
+        // column each, and this is the one place that has to pick the
+        // right one back out per row. Driver_Changed (a window "lag"
+        // compared against the previous row of the SAME Score_Type,
+        // hence the groupby) flags only the points where the driver is
+        // different from the prior snapshot's — those get their own
+        // marker layer below; the tooltip below shows Driver at every
+        // point regardless.
+        const scoreTransform = [
+            {
+                fold: ["Prestatie_Score", "Tevredenheid_Score", "Betrokkenheid_Score"],
+                as: ["Score_Type", "Score_Waarde"]
+            },
+            {
+                calculate:
+                    "datum.Score_Type == 'Prestatie_Score' ? 'Performance' : " +
+                    "datum.Score_Type == 'Tevredenheid_Score' ? 'Tevredenheid' : 'Betrokkenheid'",
+                as: "Score_Label"
+            },
+            {
+                calculate:
+                    "datum.Score_Type == 'Prestatie_Score' ? datum.Performance_Driver : " +
+                    "datum.Score_Type == 'Tevredenheid_Score' ? datum.Satisfaction_Driver : " +
+                    "datum.Engagement_Driver",
+                as: "Driver"
+            },
+            {
+                window: [{ op: "lag", field: "Driver", as: "Driver_Prev" }],
+                groupby: ["Score_Type"],
+                sort: [{ field: "Snapshot_Date" }]
+            },
+            {
+                calculate: "datum.Driver_Prev != null && datum.Driver !== datum.Driver_Prev",
+                as: "Driver_Changed"
+            }
+        ];
+        const scoreXEncoding = xEncoding("Snapshot_Date", false);
+        const scoreYEncoding = {
+            field: "Score_Waarde", type: "quantitative", title: scoreTitle,
+            scale: { zero: zeroBaseline }, axis: { grid: false }
+        };
+        const scoreColorEncoding = {
+            field: "Score_Label", type: "nominal", title: "Score",
+            scale: {
+                domain: ["Performance", "Tevredenheid", "Betrokkenheid"],
+                range: ["#e07a5f", "#3d5a80", "#81b29a"]
+            }
+        };
+        const scoreTooltip = [
+            { field: "Snapshot_Date", title: "Datum", type: "temporal" },
+            { field: "Score_Label", title: "Type" },
+            { field: "Score_Waarde", title: "Score", format: ".1f" },
+            { field: "Driver", title: "Belangrijkste factor" }
+        ];
         views.push({
             height: 110,
             data: { values: scoreTrend },
-            transform: [
+            transform: scoreTransform,
+            layer: [
                 {
-                    fold: ["Prestatie_Score", "Tevredenheid_Score", "Betrokkenheid_Score"],
-                    as: ["Score_Type", "Score_Waarde"]
-                }
-            ],
-            // "basis" (a spline smoothing), not "monotone" — Laura's
-            // Paint sketch: she wants the sharp elbow at each annual
-            // review's step-change rounded into a smooth curve (like
-            // Power BI's own "smoothed line" toggle), not just a safe
-            // interpolation that avoids overshoot between points.
-            // "monotone" still bends sharply right through the actual
-            // corner; "basis" is the standard "make jaggy steps read as
-            // smooth" choice and doesn't need to pass exactly through
-            // every point to do that.
-            mark: { type: "line", opacity: 0.85, interpolate: "basis" },
-            encoding: {
-                x: xEncoding("Snapshot_Date", false),
-                y: {
-                    field: "Score_Waarde", type: "quantitative", title: scoreTitle,
-                    scale: { zero: zeroBaseline }, axis: { grid: false }
-                },
-                color: {
-                    field: "Score_Type", type: "nominal", title: "Score",
-                    scale: {
-                        domain: ["Prestatie_Score", "Tevredenheid_Score", "Betrokkenheid_Score"],
-                        range: ["#e07a5f", "#3d5a80", "#81b29a"]
-                    },
-                    legend: {
-                        labelExpr:
-                            "datum.label == 'Prestatie_Score' ? 'Performance' : " +
-                            "datum.label == 'Tevredenheid_Score' ? 'Tevredenheid' : 'Betrokkenheid'"
+                    // "basis" (a spline smoothing), not "monotone" —
+                    // Laura's Paint sketch: she wants the sharp elbow at
+                    // each annual review's step-change rounded into a
+                    // smooth curve (like Power BI's own "smoothed line"
+                    // toggle), not just a safe interpolation that avoids
+                    // overshoot between points. "monotone" still bends
+                    // sharply right through the actual corner; "basis" is
+                    // the standard "make jaggy steps read as smooth"
+                    // choice and doesn't need to pass exactly through
+                    // every point to do that.
+                    mark: { type: "line", opacity: 0.85, interpolate: "basis" },
+                    encoding: {
+                        x: scoreXEncoding, y: scoreYEncoding, color: scoreColorEncoding,
+                        tooltip: scoreTooltip
                     }
                 },
-                tooltip: [
-                    { field: "Snapshot_Date", title: "Datum", type: "temporal" },
-                    { field: "Score_Type", title: "Type" },
-                    { field: "Score_Waarde", title: "Score", format: ".1f" }
-                ]
-            }
+                {
+                    // Only the driver-CHANGE points get a marker — every
+                    // point already has the driver in its own tooltip (the
+                    // line layer above), so a dot at every single point
+                    // would just repeat information already available on
+                    // hover instead of calling out the moments that
+                    // actually mean something: this employee's operator
+                    // for that score changed.
+                    transform: [{ filter: "datum.Driver_Changed" }],
+                    mark: { type: "point", size: 55, filled: true, opacity: 0.95 },
+                    encoding: {
+                        x: scoreXEncoding, y: scoreYEncoding, color: scoreColorEncoding,
+                        tooltip: scoreTooltip
+                    }
+                }
+            ]
         });
 
         // Verzuim, its own panel below the scores — same scoreTrend rows

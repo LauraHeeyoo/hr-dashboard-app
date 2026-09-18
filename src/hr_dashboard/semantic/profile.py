@@ -283,16 +283,31 @@ def get_employee_score_trend(employee_key: int) -> list[dict]:
     model's own absence measures used — sick-leave workdays specifically,
     not every kind of absence (planned leave, public holidays, etc.). The
     Verzuim page itself isn't built yet in this app; this is the first
-    place that column is read from here."""
+    place that column is read from here.
+
+    Also joins each row's own driver name (same three dim_*_driver joins
+    get_employee_hr_context uses, just for every snapshot here instead of
+    only the latest) — the score chart marks the points where a driver
+    changed and shows the driver in the tooltip at every point, not just
+    the single "most recent" one hr_context needs for the AI summary."""
     with get_connection() as conn:
         cur = conn.cursor()
         cur.execute(
             """
-            SELECT Snapshot_Date, Prestatie_Score, Tevredenheid_Score, Betrokkenheid_Score,
-                   Verzuim_Werkdagen
-            FROM dbo.fact_workforce_snapshot
-            WHERE Employee_Key = ?
-            ORDER BY Snapshot_Date
+            SELECT s.Snapshot_Date, s.Prestatie_Score, s.Tevredenheid_Score,
+                   s.Betrokkenheid_Score, s.Verzuim_Werkdagen,
+                   pd.Factor_Naam AS Performance_Driver,
+                   sd.Factor_Naam AS Satisfaction_Driver,
+                   ed.Factor_Naam AS Engagement_Driver
+            FROM dbo.fact_workforce_snapshot AS s
+            LEFT JOIN dbo.dim_performance_driver AS pd
+                ON pd.PerformanceDriver_Key = s.PerformanceDriver_Key
+            LEFT JOIN dbo.dim_satisfaction_driver AS sd
+                ON sd.SatisfactionDriver_Key = s.SatisfactionDriver_Key
+            LEFT JOIN dbo.dim_engagement_driver AS ed
+                ON ed.EngagementDriver_Key = s.EngagementDriver_Key
+            WHERE s.Employee_Key = ?
+            ORDER BY s.Snapshot_Date
             """,
             (employee_key,),
         )
