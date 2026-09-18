@@ -147,30 +147,43 @@ qualification/diploma or safety-incident items the *old* Power BI
 project's own backlog had flagged (would need a data-availability check
 first — not confirmed to exist in this app's database yet).
 
-### 7. Data-generator fix in progress — re-verify once the next full run lands
+### 7. ~~Uit-dienst salary jump with no explaining event~~ (RESOLVED)
 
 Spotted on Faas Giselmeyer's own "Loopbaan" chart, then confirmed systemic
 by querying the live database directly: a departing employee's final
-`fact_employment` row (`Gebeurtenis = 'Uit dienst'`) very often has a
+`fact_employment` row (`Gebeurtenis = 'Uit dienst'`) very often had a
 different `Salaris` than the row before it, with no `Salarisaanpassing`
 (or other) event recording why — checked across the whole table, 131 of
-227 departures (58%) show this unexplained jump, while every OTHER event
-type's salary changes are consistently explained by that same row's own
-event (Promotie/Salarisaanpassing always change it, Locatietransfer never
-does). Root cause: the terminal row's one `Gebeurtenis` field is already
-"spent" recording the departure itself (which — per the Datum_uitdienst
-fix elsewhere in this backlog — actually describes that row's `Einddatum`,
-not its `Startdatum`), leaving no room to also record that something
-(probably a raise) happened at that same row's `Startdatum`.
+227 departures (58%) showed this unexplained jump, while every OTHER
+event type's salary changes were consistently explained by that same
+row's own event (Promotie/Salarisaanpassing always changed it,
+Locatietransfer never did). Root cause: the terminal row's one
+`Gebeurtenis` field was already "spent" recording the departure itself
+(which — per the Datum_uitdienst fix elsewhere in this backlog —
+actually describes that row's `Einddatum`, not its `Startdatum`), leaving
+no room to also record that something (usually a raise) happened at that
+same row's `Startdatum`.
 
-Laura is fixing this in the data-generation engine now: adding a new row
-where `Startdatum = Einddatum` when a person leaves, so the departure no
-longer overwrites/absorbs whatever event actually happened at that
-Startdatum. This is a data-engine change, not an app-code change — this
-app only reads the database. Once a full simulation run with the fix has
-landed, re-run the same check (compare each "Uit dienst" row's `Salaris`
-to the row before it, per employee) to confirm the gap is actually closed
-before considering this resolved.
+**Fixed in the data-generation engine** (a data-engine change, not an
+app-code change — this app only reads the database): departing employees
+now get an extra row where `Startdatum = Einddatum` at the moment they
+leave, so the departure no longer overwrites/absorbs whatever event
+actually happened right before it — confirmed on Faas directly (his
+salary increase now has its own `Salarisaanpassing` row, 2025-08-18 to
+2026-06-22, followed by a zero-duration `Uit dienst` row at 2026-06-22
+with the same salary) and re-ran the systemic check after the full
+re-run: 0 of 227 departures now show a salary mismatch.
+
+Checked whether the app itself needed any change for the new row shape —
+it doesn't. `Gebeurtenis_Datum`'s CASE expression keys off the
+`Gebeurtenis` string rather than row position, the summary's career-
+trajectory bullets only match `Promotie`/`Transfer` so the new
+`Salarisaanpassing` row is invisible to them, the zero-duration row still
+carries `Vertrekreden` correctly, and `MIN(Einddatum)` (the Loopbaan
+timeline cutoff) can't be lowered by a new row with a recent date. The
+extra Salarisaanpassing point actually renders better than before, since
+it's covered by the existing "no on-chart label for Salarisaanpassing"
+rule — a marker with a working tooltip, no added label clutter.
 
 ### 8. Profiel's charts don't auto-size within their tile
 
