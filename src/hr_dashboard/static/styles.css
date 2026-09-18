@@ -293,10 +293,14 @@ body:has(.grid-stack) .app-header {
 
 /* The natural-language search field wants more room than a plain
    dropdown — a short question doesn't fit legibly in the same 150px
-   flex-basis every other rail field uses. */
+   flex-basis every other rail field uses. min-width is set to the
+   label's own measured natural width (~417px at this font-size,
+   confirmed live) rather than a round guess — Laura: the field looked
+   cramped specifically once the label had to wrap onto a second line,
+   so the fix is keeping it wide enough that it never needs to. */
 .filter-field-wide {
-    flex: 2 1 280px;
-    min-width: 220px;
+    flex: 2 1 430px;
+    min-width: 430px;
 }
 
 .natural-search-row {
