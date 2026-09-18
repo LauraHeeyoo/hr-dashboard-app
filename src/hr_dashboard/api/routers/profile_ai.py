@@ -29,7 +29,7 @@ def profiel_vraag(payload: EmployeeQuestion) -> dict:
     if not question:
         return {"answer": None, "error": "Stel gerust een vraag over deze medewerker."}
 
-    peildatum = payload.as_of or salary.get_latest_snapshot_date()
+    peildatum = payload.as_of or salary.get_default_peildatum()
     snapshot = profile.get_employee_snapshot(payload.employee_key, peildatum)
     if snapshot is None:
         return {"answer": None, "error": "Medewerker niet gevonden op deze peildatum."}
@@ -65,7 +65,7 @@ def profiel_zoek(payload: EmployeeSearchQuestion) -> dict:
     if not question:
         return {"employee_keys": None, "error": "Stel een zoekvraag in gewone taal."}
 
-    peildatum = payload.as_of or salary.get_latest_snapshot_date()
+    peildatum = payload.as_of or salary.get_default_peildatum()
     filter_values = profile.get_search_filter_values(peildatum)
 
     try:

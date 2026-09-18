@@ -35,6 +35,16 @@ def salaris_chat(payload: ChatQuestion) -> dict:
     # instead (a specific afdeling/functie/etc. as a filter, or a specific
     # date as peildatum — see client.py's instructions), never a
     # dependency on whatever the filter rail happens to be set to.
+    #
+    # Deliberately NOT switched to get_default_peildatum() the way the
+    # page-level Peildatum fields were — this latest_date does double
+    # duty here as both "the end of the real data range" (ask_planner's
+    # own range-validity instructions) and "today" for relative language
+    # ("dit jaar", "nu"). Swapping in real "today" would shrink the
+    # range the model believes is answerable without also touching
+    # ask_planner's own instructions text, risking the chat rejecting or
+    # misreading questions about dates that are genuinely still in the
+    # simulated data. Flagged for Laura rather than changed blind.
     latest_date = salary.get_latest_snapshot_date()
     earliest_date = salary.get_earliest_snapshot_date()
     filter_options = salary.get_filter_options(latest_date, SalaryFilters())

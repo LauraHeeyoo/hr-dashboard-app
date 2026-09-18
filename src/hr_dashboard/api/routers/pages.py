@@ -75,7 +75,7 @@ def salaris_page(
     dim_benchmark = _clean_dimension(dim_benchmark)
     dim_new_hire = _clean_dimension(dim_new_hire)
 
-    peildatum = as_of or salary.get_latest_snapshot_date()
+    peildatum = as_of or salary.get_default_peildatum()
     filters = SalaryFilters(
         afdeling=_none_if_blank(afdeling),
         functie=_none_if_blank(functie),
@@ -217,7 +217,7 @@ def salaris_medewerkers_page(
     if subset not in _MEDEWERKERS_SUBSETS:
         subset = "alle"
 
-    peildatum = as_of or salary.get_latest_snapshot_date()
+    peildatum = as_of or salary.get_default_peildatum()
     filters = SalaryFilters(
         afdeling=_none_if_blank(afdeling),
         functie=_none_if_blank(functie),
@@ -287,7 +287,7 @@ def profiel_page(
     natural_search_keys: str | None = Query(default=None),
     natural_search_query: str | None = Query(default=None),
 ):
-    peildatum = as_of or salary.get_latest_snapshot_date()
+    peildatum = as_of or salary.get_default_peildatum()
     employee_key_int = int(employee_key) if employee_key else None
     filters = ProfileFilters(
         afdeling=_none_if_blank(afdeling),

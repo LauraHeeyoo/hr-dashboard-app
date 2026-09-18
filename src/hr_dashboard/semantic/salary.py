@@ -153,8 +153,12 @@ class SalaryKpis:
 
 
 def get_latest_snapshot_date() -> date:
-    """The default "Peildatum" when none is chosen — mirrors the old model's
-    `Peildatum = MAX(dim_datum.Datum)` measure."""
+    """The newest available data point — mirrors the old model's
+    `Peildatum = MAX(dim_datum.Datum)` measure. Used for things that
+    genuinely want the full simulated range regardless of "today" (the
+    LFL trend chart's own earliest-to-latest span, compiler.py's trend
+    resolution) — for the default "Peildatum" a page/endpoint actually
+    opens with, use get_default_peildatum below instead."""
     with get_connection() as conn:
         cur = conn.cursor()
         cur.execute("SELECT MAX(Snapshot_Date) FROM dbo.fact_workforce_snapshot")
@@ -171,6 +175,24 @@ def get_earliest_snapshot_date() -> date:
         cur = conn.cursor()
         cur.execute("SELECT MIN(Snapshot_Date) FROM dbo.fact_workforce_snapshot")
         return cur.fetchone()[0]
+
+
+def get_default_peildatum() -> date:
+    """The "Peildatum" every page/endpoint opens with when the user hasn't
+    picked one — real "today" (date.today()), not the latest simulated
+    snapshot. Laura's call: a "coming up in the next 30 days" style check
+    (Profiel's birthday/jubileum search) needs to compare against the
+    actual present, not an arbitrary snapshot date that can sit in the
+    future relative to whoever's actually using the app right now (the
+    simulation can run ahead of real time, e.g. the latest snapshot
+    currently sits at 2026-09-30 while today is still 2026-09-18).
+
+    Clamped to the latest snapshot date so this never lands somewhere
+    the simulation hasn't generated data for yet, if the app is ever
+    used after the simulation stops being extended — same "derive it
+    from what's actually there" rule get_earliest_snapshot_date already
+    follows for the LFL slider, just applied to the other end."""
+    return min(date.today(), get_latest_snapshot_date())
 
 
 def get_filter_options(as_of_date: date, filters: SalaryFilters) -> dict[str, list[str]]:
