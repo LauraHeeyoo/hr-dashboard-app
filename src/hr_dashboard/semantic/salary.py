@@ -15,7 +15,7 @@ caller's string directly.
 """
 
 from dataclasses import dataclass, fields, replace
-from datetime import date
+from datetime import date, timedelta
 
 from hr_dashboard.db.connection import get_connection
 from hr_dashboard.semantic.common import rows_as_dicts as _rows_as_dicts
@@ -179,20 +179,37 @@ def get_earliest_snapshot_date() -> date:
 
 def get_default_peildatum() -> date:
     """The "Peildatum" every page/endpoint opens with when the user hasn't
-    picked one — real "today" (date.today()), not the latest simulated
-    snapshot. Laura's call: a "coming up in the next 30 days" style check
-    (Profiel's birthday/jubileum search) needs to compare against the
-    actual present, not an arbitrary snapshot date that can sit in the
-    future relative to whoever's actually using the app right now (the
-    simulation can run ahead of real time, e.g. the latest snapshot
-    currently sits at 2026-09-30 while today is still 2026-09-18).
+    picked one — the end of the last FULLY completed calendar month, not
+    "today" and not the latest simulated snapshot.
+
+    Why not the latest snapshot: fact_workforce_snapshot's grain is one
+    row per employee per month-end, including the current, still-in-
+    progress month — that row is computed from today's real data but
+    labeled with this month's canonical end-date regardless of where in
+    the month "today" actually falls (confirmed with the data-generator
+    session: `_snapshot_dates` snaps `end_date` to
+    `to_period("M").to_timestamp("M")`). So "the latest snapshot" can be
+    a date that hasn't happened yet — right now 2026-09-30 while today
+    is 2026-09-18 — and Laura's own call: she'd rather default to data
+    that lags a bit than have Peildatum default to a future-looking date
+    at all.
+
+    Why not real date.today() either: mcp.fn_workforce_snapshot_asof
+    resolves "the closest snapshot AT OR BEFORE this date" — pointing it
+    at today (2026-09-18) would skip straight past that same mislabeled
+    current-month row (dated 2026-09-30, which is after today) and fall
+    back to LAST month's snapshot anyway. Computing that explicitly
+    here, rather than relying on that fallback behavior to happen to
+    land in the right place, is the same date every single day within
+    the current month, not something that happens to work out.
 
     Clamped to the latest snapshot date so this never lands somewhere
     the simulation hasn't generated data for yet, if the app is ever
     used after the simulation stops being extended — same "derive it
     from what's actually there" rule get_earliest_snapshot_date already
     follows for the LFL slider, just applied to the other end."""
-    return min(date.today(), get_latest_snapshot_date())
+    previous_month_end = date.today().replace(day=1) - timedelta(days=1)
+    return min(previous_month_end, get_latest_snapshot_date())
 
 
 def get_filter_options(as_of_date: date, filters: SalaryFilters) -> dict[str, list[str]]:

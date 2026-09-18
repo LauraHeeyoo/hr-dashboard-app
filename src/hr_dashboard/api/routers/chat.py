@@ -40,11 +40,16 @@ def salaris_chat(payload: ChatQuestion) -> dict:
     # page-level Peildatum fields were — this latest_date does double
     # duty here as both "the end of the real data range" (ask_planner's
     # own range-validity instructions) and "today" for relative language
-    # ("dit jaar", "nu"). Swapping in real "today" would shrink the
-    # range the model believes is answerable without also touching
-    # ask_planner's own instructions text, risking the chat rejecting or
-    # misreading questions about dates that are genuinely still in the
-    # simulated data. Flagged for Laura rather than changed blind.
+    # ("dit jaar", "nu"). get_default_peildatum() now resolves to the end
+    # of the *previous* calendar month (Laura's call, on top of the
+    # data-generator finding that fact_workforce_snapshot's current-month
+    # row is real data mislabeled with a future month-end date) — an
+    # even earlier date than plain "today" was, so swapping it in here
+    # would shrink the range the model believes is answerable even
+    # further, without also touching ask_planner's own instructions
+    # text. Risks the chat rejecting or misreading questions about dates
+    # that are genuinely still in the simulated data. Flagged for Laura
+    # rather than changed blind.
     latest_date = salary.get_latest_snapshot_date()
     earliest_date = salary.get_earliest_snapshot_date()
     filter_options = salary.get_filter_options(latest_date, SalaryFilters())

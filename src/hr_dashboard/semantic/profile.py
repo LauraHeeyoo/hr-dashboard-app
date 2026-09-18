@@ -875,8 +875,14 @@ def build_employee_summary(
                 f"{naam} is jarig op {geboortedatum.day} {_MAAND_NAMEN[geboortedatum.month - 1]}."
             )
         if aanneem_datum:
+            # date.today(), not peildatum — "when is the next work
+            # anniversary" is a real-calendar question, independent of
+            # which data snapshot happens to be shown (Laura's call:
+            # this and the birthday sentence above are the one place in
+            # the summary that should stay anchored to the actual
+            # present, not whatever Peildatum currently defaults to).
             volgend_jubileum = _next_occurrence(
-                aanneem_datum.month, aanneem_datum.day, peildatum
+                aanneem_datum.month, aanneem_datum.day, date.today()
             )
             jaren_in_dienst = volgend_jubileum.year - aanneem_datum.year
             parts.append(
@@ -918,19 +924,22 @@ def get_search_filter_values(as_of_date: date) -> dict[str, list[str]]:
         return values
 
 
-def _employees_with_upcoming(cur, as_of_date: date, date_column: str) -> set[int]:
+def _employees_with_upcoming(cur, reference_date: date, date_column: str) -> set[int]:
     """Employee_Keys whose next occurrence of date_column's month/day
     (birthday or work anniversary — this helper is generic over both)
-    falls within 30 days of as_of_date. Reuses _next_occurrence, the
-    same "closest upcoming occurrence, Feb 29 falls back to the 28th"
-    logic the summary's own birthday/jubileum bullet already uses."""
+    falls within 30 days of reference_date. Named "reference_date", not
+    "as_of_date" — callers should pass date.today() here, not a
+    resolved Peildatum; "coming up soon" is a real-calendar question,
+    not a "which data snapshot" one. Reuses _next_occurrence, the same
+    "closest upcoming occurrence, Feb 29 falls back to the 28th" logic
+    the summary's own birthday/jubileum bullet already uses."""
     cur.execute(
         f"SELECT Employee_Key, {date_column} FROM dbo.dim_employee WHERE {date_column} IS NOT NULL"
     )
     matches = set()
     for employee_key, base_date in cur.fetchall():
-        next_occurrence = _next_occurrence(base_date.month, base_date.day, as_of_date)
-        if (next_occurrence - as_of_date).days <= 30:
+        next_occurrence = _next_occurrence(base_date.month, base_date.day, reference_date)
+        if (next_occurrence - reference_date).days <= 30:
             matches.add(employee_key)
     return matches
 
@@ -980,7 +989,13 @@ def get_employees_matching_search(request, as_of_date: date) -> list[int]:
     score-drop flags each need their own direct query, since the as-of
     function doesn't expose any of those. Every active criterion is
     intersected (AND, not OR) — matches Laura's own instruction that
-    combined criteria should all apply at once, not any one of them."""
+    combined criteria should all apply at once, not any one of them.
+
+    as_of_date only drives the data-snapshot-based criteria (afdeling/
+    functie/opleidingsniveau/benchmark/compa-ratio/verzuim/YoY drops) —
+    the birthday/anniversary checks deliberately use real date.today()
+    instead (see _employees_with_upcoming), since "coming up soon" is a
+    calendar question, not a "which snapshot" one."""
     with get_connection() as conn:
         cur = conn.cursor()
 
@@ -1005,11 +1020,16 @@ def get_employees_matching_search(request, as_of_date: date) -> list[int]:
         )
         matching = {row[0] for row in cur.fetchall()}
 
+        # date.today(), not as_of_date — "coming up in the next 30 days"
+        # is a real-calendar question, independent of which data
+        # snapshot Peildatum happens to be resolving elsewhere in this
+        # same function (afdeling/functie/salaris checks correctly stay
+        # anchored to as_of_date; only these two calendar checks don't).
         if request.jarig_binnen_30_dagen:
-            matching &= _employees_with_upcoming(cur, as_of_date, "Geboortedatum")
+            matching &= _employees_with_upcoming(cur, date.today(), "Geboortedatum")
         if request.jubileum_binnen_30_dagen:
             matching &= _employees_with_upcoming(
-                cur, as_of_date, "Aaneengesloten_Indienst_Datum"
+                cur, date.today(), "Aaneengesloten_Indienst_Datum"
             )
         if request.performance_gedaald:
             matching &= _employees_with_score_drop(cur, as_of_date, "Prestatie_Score")
