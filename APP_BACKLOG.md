@@ -185,7 +185,34 @@ extra Salarisaanpassing point actually renders better than before, since
 it's covered by the existing "no on-chart label for Salarisaanpassing"
 rule — a marker with a working tooltip, no added label clutter.
 
-### 8. Profiel's charts don't auto-size within their tile
+### 8. Data-generator fix in progress — "Contract omgezet naar vast" / "Contract verlengd" never actually trigger
+
+Same category of gap as the (now-resolved) Uit-dienst salary jump above:
+`dim_event_type` defines both `Contract omgezet naar vast` (temp -> vast)
+and `Contract verlengd` (temp contract renewed), and this app's code
+already handles both — the summary's opening bullet mentions a contract
+conversion with its full date, and a dedicated bullet counts contract
+renewals (Laura: this tells a manager whether the next renewal should be
+a permanent contract instead, not just routine noise) — but neither
+event ever actually fires in the current simulation. Checked live: 484
+`fact_employment` rows have `Contracttype = 'Tijdelijk'`, but not one
+employee, anywhere in the table, ever transitions from `Tijdelijk` to
+`Vast` between two consecutive stints, under any event label. The event
+types are defined but the generator logic that would trigger them
+apparently doesn't exist yet.
+
+Laura is looking into this in the data-generation engine now (same
+"app only reads the database" boundary as the salary-jump fix — no
+app-code change here). Once a full simulation run with the fix lands,
+re-verify both pieces of app code that are currently unverifiable for
+lack of real data to render:
+- The opening bullet's "is op [datum] overgegaan naar een vast
+  contract" sentence (`_contract_vast_datum`/`build_employee_summary`
+  in `semantic/profile.py`).
+- The "heeft N keer een tijdelijk contract verlengd" bullet
+  (`_contract_verlengd_bullet`).
+
+### 9. Profiel's charts don't auto-size within their tile
 
 Laura: "Grafieken auto-sizen nu niet binnen een tile" — the "Loopbaan"
 chart (and presumably any future Profiel chart) isn't resizing to fill its

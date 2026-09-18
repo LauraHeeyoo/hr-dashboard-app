@@ -625,12 +625,17 @@ _MAAND_NAMEN: list[str] = [
 # NOT every dim_event_type value. Salarisaanpassing is routine enough
 # (most employees have several) to not tell much of a story, and would
 # quietly reintroduce salary content the summary deliberately dropped.
-# Contract verlengd is similarly routine. Locatietransfer is a different
-# topic (where someone works, not career progression) and pairs better
-# with a static "Location" fact than a trajectory sentence.
+# Locatietransfer is a different topic (where someone works, not career
+# progression) and pairs better with a static "Location" fact than a
+# trajectory sentence. Contract verlengd (a temporary contract renewed)
+# DOES get its own bullet, unlike Salarisaanpassing — Laura's call: how
+# many times someone's temporary contract has been renewed is exactly
+# the kind of thing that tells a manager whether the next renewal should
+# be a permanent contract instead, not just routine noise.
 _PROMOTIE = "Promotie"
 _TRANSFER = "Transfer"
 _CONTRACT_VAST = "Contract omgezet naar vast"
+_CONTRACT_VERLENGD = "Contract verlengd"
 
 
 def _maand_jaar(d: date) -> str:
@@ -717,6 +722,13 @@ def _transfer_bullet(naam: str, history: list[dict]) -> str | None:
 def _contract_vast_datum(history: list[dict]) -> date | None:
     row = next((e for e in history if e["Gebeurtenis"] == _CONTRACT_VAST), None)
     return row["Gebeurtenis_Datum"] if row else None
+
+
+def _contract_verlengd_bullet(naam: str, history: list[dict]) -> str | None:
+    count = sum(1 for e in history if e["Gebeurtenis"] == _CONTRACT_VERLENGD)
+    if not count:
+        return None
+    return f"Sinds indiensttreding heeft {naam} {count} keer een tijdelijk contract verlengd."
 
 
 def _score_clause(satisfaction_driver: str, engagement_driver: str, *, lead_in: bool) -> str:
@@ -812,6 +824,9 @@ def build_employee_summary(
     transfer = _transfer_bullet(naam, history)
     if transfer:
         bullets.append(transfer)
+    contract_verlengd = _contract_verlengd_bullet(naam, history)
+    if contract_verlengd:
+        bullets.append(contract_verlengd)
 
     # Fixed 3-part structure (not a generic join over however many drivers
     # happen to be present) — performance gets its own sentence,
