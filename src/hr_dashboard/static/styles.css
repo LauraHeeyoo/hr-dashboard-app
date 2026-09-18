@@ -297,10 +297,23 @@ body:has(.grid-stack) .app-header {
    label's own measured natural width (~417px at this font-size,
    confirmed live) rather than a round guess — Laura: the field looked
    cramped specifically once the label had to wrap onto a second line,
-   so the fix is keeping it wide enough that it never needs to. */
+   so the fix is keeping it wide enough that it never needs to.
+   Desktop-only: on mobile (dashboard_base.html's own reflow collapses
+   the rail to one field per row below this same 640px breakpoint —
+   MOBILE_BREAKPOINT_PX there), this field already gets its own full-
+   width row regardless, so nothing else shifts if its label wraps —
+   Laura's own call that forcing the wide minimum there just risks
+   overflowing a narrow phone screen for no benefit. */
 .filter-field-wide {
     flex: 2 1 430px;
     min-width: 430px;
+}
+
+@media (max-width: 640px) {
+    .filter-field-wide {
+        flex: 1 1 150px;
+        min-width: 150px;
+    }
 }
 
 .natural-search-row {
