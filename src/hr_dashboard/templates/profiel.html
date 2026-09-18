@@ -82,6 +82,23 @@
                     {% endfor %}
                 </select>
             </div>
+            <div class="filter-field filter-field-wide">
+                <label for="natural-search-input">Zoeken in gewone taal (v1 — nog niet alles wordt herkend)</label>
+                <div class="natural-search-row">
+                    <input type="text" id="natural-search-input"
+                           placeholder="Bijv. ‘iedereen die binnen 30 dagen jarig is in Finance’"
+                           value="{{ natural_search_query or '' }}">
+                    <button type="button" class="btn btn-secondary" id="natural-search-btn">Zoek</button>
+                </div>
+                <input type="hidden" name="natural_search_active" id="natural-search-active-hidden" value="{{ '1' if natural_search_active else '' }}">
+                <input type="hidden" name="natural_search_keys" id="natural-search-keys-hidden" value="{{ natural_search_keys or '' }}">
+                <input type="hidden" name="natural_search_query" id="natural-search-query-hidden" value="{{ natural_search_query or '' }}">
+                <div id="natural-search-status" class="natural-search-status">
+                    {% if natural_search_active %}
+                    Zoekopdracht actief: ‘{{ natural_search_query }}’ ({{ narrowed_employees | length }} resultaten). <a href="#" id="natural-search-clear">Wis zoekopdracht</a>
+                    {% endif %}
+                </div>
+            </div>
             <div class="filter-field">
                 <label for="employee_key">Medewerker ({{ narrowed_employees | length }})</label>
                 <select id="employee_key" name="employee_key">
@@ -185,6 +202,18 @@
         </div>
     </div>
 </div>
+
+<div class="grid-stack-item" gs-id="profile-qa" gs-x="0" gs-y="29" gs-w="12" gs-h="4" gs-min-w="4">
+    <div class="grid-stack-item-content chart-card">
+        <span class="tile-grip"></span>
+        <h2>Vraag over deze medewerker</h2>
+        <div class="profile-qa-row">
+            <input type="text" id="qa-input" placeholder="Bijv. ‘Hoe lang werkt deze medewerker hier al?’">
+            <button type="button" class="btn btn-secondary" id="qa-btn">Vraag</button>
+        </div>
+        <div id="qa-result" class="profile-qa-result"></div>
+    </div>
+</div>
 {% else %}
 <div class="grid-stack-item" gs-id="profile-empty" gs-x="0" gs-y="2" gs-w="12" gs-h="3" gs-min-w="4">
     <div class="grid-stack-item-content chart-card">
@@ -200,6 +229,67 @@
 {% endblock %}
 
 {% block dashboard_script %}
+// Natural-language search (filter rail) — lives outside the "snapshot"
+// guard below since the filter rail itself is always rendered, even
+// before an employee is picked. Resolves a free-text
+// question to matching Employee_Keys via /profiel/zoek, then stores
+// them in the two hidden fields already sitting in #filter-form and
+// resubmits it — the exact same "change a rail field, reload the page"
+// convention every other filter already uses, so the narrowed
+// Medewerker dropdown just re-renders normally server-side.
+(function () {
+    const input = document.getElementById("natural-search-input");
+    const btn = document.getElementById("natural-search-btn");
+    const status = document.getElementById("natural-search-status");
+    const activeHidden = document.getElementById("natural-search-active-hidden");
+    const keysHidden = document.getElementById("natural-search-keys-hidden");
+    const queryHidden = document.getElementById("natural-search-query-hidden");
+    const clearLink = document.getElementById("natural-search-clear");
+
+    btn.addEventListener("click", async () => {
+        const question = input.value.trim();
+        if (!question) return;
+        btn.disabled = true;
+        const previousText = btn.textContent;
+        btn.textContent = "Bezig...";
+        try {
+            const res = await fetch("/profiel/zoek", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ as_of: "{{ peildatum }}", question })
+            });
+            const data = await res.json();
+            if (data.error) {
+                status.textContent = data.error;
+                return;
+            }
+            // employee_keys can legitimately be an empty array (a real
+            // search that matches no one) — natural_search_active is
+            // what tells the server a search is active at all, since an
+            // empty keysHidden value on its own is indistinguishable
+            // from "no search happened."
+            activeHidden.value = "1";
+            keysHidden.value = data.employee_keys.join(",");
+            queryHidden.value = question;
+            document.getElementById("filter-form").submit();
+        } catch (e) {
+            status.textContent = "Kon deze zoekvraag niet verwerken.";
+        } finally {
+            btn.disabled = false;
+            btn.textContent = previousText;
+        }
+    });
+
+    clearLink?.addEventListener("click", (e) => {
+        e.preventDefault();
+        activeHidden.value = "";
+        keysHidden.value = "";
+        queryHidden.value = "";
+        input.value = "";
+        document.getElementById("filter-form").submit();
+    });
+})();
+
 {% if snapshot %}
 // Events before timeline_cutoff aren't hidden because they didn't
 // happen — they're hidden because the simulation itself has no career
@@ -694,5 +784,41 @@ if (historyEvents.length || scoreTrend.length) {
         });
     });
 }
+
+// "Vraag over deze medewerker" — a plain fetch-on-click over this one
+// employee's own already-fetched data (profile_ai.py's /profiel/vraag),
+// the same fact-grounded pattern the old (now-removed) LLM-generated
+// summary used, just answering a free-text question instead of always
+// producing the same fixed structure.
+(function () {
+    const employeeKey = {{ employee_key }};
+    const input = document.getElementById("qa-input");
+    const btn = document.getElementById("qa-btn");
+    const result = document.getElementById("qa-result");
+
+    btn.addEventListener("click", async () => {
+        const question = input.value.trim();
+        if (!question) return;
+        btn.disabled = true;
+        const previousText = btn.textContent;
+        btn.textContent = "Bezig...";
+        try {
+            const res = await fetch("/profiel/vraag", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    employee_key: employeeKey, as_of: "{{ peildatum }}", question
+                })
+            });
+            const data = await res.json();
+            result.textContent = data.answer || data.error || "Geen antwoord beschikbaar.";
+        } catch (e) {
+            result.textContent = "Kon geen antwoord genereren.";
+        } finally {
+            btn.disabled = false;
+            btn.textContent = previousText;
+        }
+    });
+})();
 {% endif %}
 {% endblock %}

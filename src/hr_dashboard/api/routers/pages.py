@@ -273,6 +273,19 @@ def profiel_page(
     # whatever it's currently set to, so leaving no employee selected and
     # then changing e.g. Afdeling would 422 the whole page.
     employee_key: str | None = Query(default=None),
+    # Set by the filter rail's natural-language search box (profiel.html's
+    # own JS) after resolving a question via /profiel/zoek — a plain
+    # comma-joined Employee_Key list, not a new ProfileFilters field,
+    # since it's an independent post-filter on top of the existing rail
+    # rather than another column the as-of function itself can filter on.
+    # natural_search_active is its own separate flag rather than checking
+    # natural_search_keys' own blankness — a search that legitimately
+    # matches zero employees ALSO submits an empty natural_search_keys,
+    # which would otherwise be indistinguishable from "no search active"
+    # and silently show everyone instead of "0 resultaten."
+    natural_search_active: str | None = Query(default=None),
+    natural_search_keys: str | None = Query(default=None),
+    natural_search_query: str | None = Query(default=None),
 ):
     peildatum = as_of or salary.get_latest_snapshot_date()
     employee_key_int = int(employee_key) if employee_key else None
@@ -287,6 +300,15 @@ def profiel_page(
 
     filter_options = profile.get_profile_filter_options(peildatum, filters)
     narrowed_employees = profile.get_narrowed_employees(peildatum, filters)
+    natural_search_active = _none_if_blank(natural_search_active)
+    if natural_search_active:
+        matched_keys = (
+            {int(k) for k in natural_search_keys.split(",") if k}
+            if natural_search_keys else set()
+        )
+        narrowed_employees = [
+            e for e in narrowed_employees if e["Employee_Key"] in matched_keys
+        ]
     # The dropdown still filters on the raw Performance_Bin value (matching
     # what mcp.fn_workforce_snapshot_asof stores), but shows the doubled
     # label — same reasoning as get_employee_snapshot's own doubling.
@@ -368,6 +390,9 @@ def profiel_page(
             "summary": summary,
             "engagement_band": engagement_band,
             "timeline_cutoff": timeline_cutoff,
+            "natural_search_active": natural_search_active,
+            "natural_search_keys": natural_search_keys,
+            "natural_search_query": natural_search_query,
             "peer_comparison_json": json.dumps(peer_comparison, default=_json_default),
             "clear_filters_url": "/profiel?" + "&".join(
                 f"{k}={v}" for k, v in clear_filters_params.items()

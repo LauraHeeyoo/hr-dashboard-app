@@ -888,3 +888,147 @@ def build_employee_summary(
             bullets.append(" ".join(parts))
 
     return bullets
+
+
+def get_search_filter_values(as_of_date: date) -> dict[str, list[str]]:
+    """The real, current afdeling/functie/opleidingsniveau values — handed
+    to the search planner LLM (llm/employee_search.py) so it only ever
+    picks a value that actually exists, the same "give the model the
+    real list" rule ask_planner's own instructions already follow.
+    Unfiltered (not cross-filtered against the current rail selection
+    like get_profile_filter_options) — this is the search box's own
+    independent catalog, not another rail field reacting to the others."""
+    with get_connection() as conn:
+        cur = conn.cursor()
+        values = {}
+        for field, column in (
+            ("afdeling", "Afdeling_Naam"),
+            ("functie", "Functie_Naam"),
+            ("opleidingsniveau", "Opleidingsniveau"),
+        ):
+            cur.execute(
+                f"""
+                SELECT DISTINCT {column}
+                FROM mcp.fn_workforce_snapshot_asof({_ASOF_PARAM_PLACEHOLDERS})
+                WHERE {column} IS NOT NULL
+                """,
+                (as_of_date, None, None, None, None, None),
+            )
+            values[field] = sorted(r[0] for r in cur.fetchall())
+        return values
+
+
+def _employees_with_upcoming(cur, as_of_date: date, date_column: str) -> set[int]:
+    """Employee_Keys whose next occurrence of date_column's month/day
+    (birthday or work anniversary — this helper is generic over both)
+    falls within 30 days of as_of_date. Reuses _next_occurrence, the
+    same "closest upcoming occurrence, Feb 29 falls back to the 28th"
+    logic the summary's own birthday/jubileum bullet already uses."""
+    cur.execute(
+        f"SELECT Employee_Key, {date_column} FROM dbo.dim_employee WHERE {date_column} IS NOT NULL"
+    )
+    matches = set()
+    for employee_key, base_date in cur.fetchall():
+        next_occurrence = _next_occurrence(base_date.month, base_date.day, as_of_date)
+        if (next_occurrence - as_of_date).days <= 30:
+            matches.add(employee_key)
+    return matches
+
+
+def _employees_with_score_drop(cur, as_of_date: date, field: str) -> set[int]:
+    """Employee_Keys whose latest fact_workforce_snapshot value for
+    `field` is lower than their own value from ~1 year before — same
+    tolerance as _value_about_a_year_before (within 60 days of exactly
+    365 days back), just resolved for every employee at once instead of
+    one employee's already-fetched score_trend. Comparing the raw
+    (un-doubled) Prestatie_Score here is fine even though the rest of the
+    app doubles it for display — "current < past" gives the identical
+    answer whether or not both sides are doubled by the same factor."""
+    cur.execute(
+        f"""
+        SELECT Employee_Key, Snapshot_Date, {field}
+        FROM dbo.fact_workforce_snapshot
+        WHERE Snapshot_Date <= ?
+        ORDER BY Employee_Key, Snapshot_Date
+        """,
+        (as_of_date,),
+    )
+    by_employee: dict[int, list[dict]] = {}
+    for employee_key, snapshot_date, value in cur.fetchall():
+        by_employee.setdefault(employee_key, []).append(
+            {"Snapshot_Date": snapshot_date, field: value}
+        )
+
+    matches = set()
+    for employee_key, rows in by_employee.items():
+        latest = rows[-1]
+        past_value = _value_about_a_year_before(rows, field, latest["Snapshot_Date"])
+        current_value = latest.get(field)
+        if past_value is not None and current_value is not None and current_value < past_value:
+            matches.add(employee_key)
+    return matches
+
+
+def get_employees_matching_search(request, as_of_date: date) -> list[int]:
+    """Resolves a parsed EmployeeSearchRequest (llm/employee_search.py —
+    not imported here, so this module stays LLM-agnostic; any object
+    with the same attributes works) into matching Employee_Keys.
+
+    afdeling/functie/opleidingsniveau and the two benchmark/compa-ratio
+    flags reuse mcp.fn_workforce_snapshot_asof directly (already exactly
+    these columns/parameters); birthday/anniversary and the three YoY
+    score-drop flags each need their own direct query, since the as-of
+    function doesn't expose any of those. Every active criterion is
+    intersected (AND, not OR) — matches Laura's own instruction that
+    combined criteria should all apply at once, not any one of them."""
+    with get_connection() as conn:
+        cur = conn.cursor()
+
+        conditions = []
+        params = [
+            as_of_date, request.afdeling, request.functie, None,
+            request.opleidingsniveau, None,
+        ]
+        if request.salaris_onder_benchmark:
+            conditions.append("Benchmark_Status IN (?, ?)")
+            params.extend(["Ver onder benchmark", "Onder benchmark"])
+        if request.lage_compa_ratio:
+            conditions.append("Compa_Ratio_Interne_Schaal < 0.30")
+        where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+        cur.execute(
+            f"""
+            SELECT Employee_Key
+            FROM mcp.fn_workforce_snapshot_asof({_ASOF_PARAM_PLACEHOLDERS})
+            {where_clause}
+            """,
+            params,
+        )
+        matching = {row[0] for row in cur.fetchall()}
+
+        if request.jarig_binnen_30_dagen:
+            matching &= _employees_with_upcoming(cur, as_of_date, "Geboortedatum")
+        if request.jubileum_binnen_30_dagen:
+            matching &= _employees_with_upcoming(
+                cur, as_of_date, "Aaneengesloten_Indienst_Datum"
+            )
+        if request.performance_gedaald:
+            matching &= _employees_with_score_drop(cur, as_of_date, "Prestatie_Score")
+        if request.tevredenheid_gedaald:
+            matching &= _employees_with_score_drop(cur, as_of_date, "Tevredenheid_Score")
+        if request.betrokkenheid_gedaald:
+            matching &= _employees_with_score_drop(cur, as_of_date, "Betrokkenheid_Score")
+
+        if request.verzuim_dagen_min is not None:
+            cur.execute(
+                """
+                SELECT Employee_Key
+                FROM dbo.fact_workforce_snapshot
+                WHERE Snapshot_Date <= ? AND Snapshot_Date > DATEADD(day, -365, ?)
+                GROUP BY Employee_Key
+                HAVING SUM(Verzuim_Werkdagen) >= ?
+                """,
+                (as_of_date, as_of_date, request.verzuim_dagen_min),
+            )
+            matching &= {row[0] for row in cur.fetchall()}
+
+        return sorted(matching)

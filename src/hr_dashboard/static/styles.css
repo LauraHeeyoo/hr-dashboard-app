@@ -281,13 +281,57 @@ body:has(.grid-stack) .app-header {
 }
 
 .filter-field select,
-.filter-field input[type="date"] {
+.filter-field input[type="date"],
+.filter-field input[type="text"] {
     width: 100%;
     padding: 6px 8px;
     border: 1px solid var(--border);
     border-radius: 6px;
     font-size: 0.85rem;
     background: #fff;
+}
+
+/* The natural-language search field wants more room than a plain
+   dropdown — a short question doesn't fit legibly in the same 150px
+   flex-basis every other rail field uses. */
+.filter-field-wide {
+    flex: 2 1 280px;
+    min-width: 220px;
+}
+
+.natural-search-row {
+    display: flex;
+    gap: 8px;
+}
+
+.natural-search-row input {
+    flex: 1 1 auto;
+}
+
+.natural-search-status {
+    margin-top: 6px;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+}
+
+.profile-qa-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.profile-qa-row input {
+    flex: 1 1 auto;
+    padding: 6px 8px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 0.85rem;
+}
+
+.profile-qa-result {
+    margin-top: 12px;
+    line-height: 1.5;
+    color: var(--navy);
 }
 
 .filter-actions {
