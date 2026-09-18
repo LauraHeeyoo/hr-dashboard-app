@@ -192,31 +192,39 @@ def get_employee_snapshot(employee_key: int, as_of_date: date) -> dict | None:
         columns = [c[0] for c in cur.description]
         result = dict(zip(columns, row))
         # Doubled here at the source (not per-caller) so every consumer of
-        # this snapshot — the identity card and the AI summary alike —
-        # automatically sees a band that matches the doubled score shown
-        # alongside it. See PERFORMANCE_BIN_DOUBLED above for why.
+        # this snapshot — currently just the identity card — automatically
+        # sees a band that matches the doubled score shown alongside it.
+        # See PERFORMANCE_BIN_DOUBLED above for why.
         result["Performance_Bin"] = double_performance_bin(result["Performance_Bin"])
         return result
 
 
 def get_employee_identity(employee_key: int) -> dict | None:
     """Static per-employee facts that don't need as-of resolution — a
-    birthdate or avatar doesn't change between snapshots — so this reads
-    dim_employee directly rather than going through the as-of function.
+    birthdate, avatar, or work location doesn't change between
+    snapshots — so this reads dim_employee directly rather than going
+    through the as-of function.
 
     Bijzondere_Aanstelling is almost always NULL (confirmed live — values
     like "Expat" are the rare exception) — the summary template only
     mentions it when set, the same way it only mentions a departure
-    reason when there is one."""
+    reason when there is one.
+
+    Vestiging_Naam (via dim_location) is one of only three real sites
+    (confirmed live: Fabriek Noord/DC/Hoofdkantoor), most employees at
+    the first — genuine context, not filler, so it goes on the identity
+    card rather than the summary text."""
     with get_connection() as conn:
         cur = conn.cursor()
         cur.execute(
             """
-            SELECT Voornaam, Achternaam, Geboortedatum, Avatar_URL,
-                   Eerste_Indienst_Datum, Aaneengesloten_Indienst_Datum,
-                   Datum_uitdienst, In_Dienst, Bijzondere_Aanstelling
-            FROM dbo.dim_employee
-            WHERE Employee_Key = ?
+            SELECT e.Voornaam, e.Achternaam, e.Geboortedatum, e.Avatar_URL,
+                   e.Eerste_Indienst_Datum, e.Aaneengesloten_Indienst_Datum,
+                   e.Datum_uitdienst, e.In_Dienst, e.Bijzondere_Aanstelling,
+                   l.Vestiging_Naam
+            FROM dbo.dim_employee AS e
+            LEFT JOIN dbo.dim_location AS l ON l.Location_Key = e.Location_Key
+            WHERE e.Employee_Key = ?
             """,
             (employee_key,),
         )
@@ -225,6 +233,34 @@ def get_employee_identity(employee_key: int) -> dict | None:
             return None
         columns = [c[0] for c in cur.description]
         return dict(zip(columns, row))
+
+
+def get_employee_engagement_band(employee_key: int, as_of_date: date) -> str | None:
+    """Betrokkenheid's own band, for the identity card — same idea as
+    Performance_Bin/Tevredenheidsband_Naam, but mcp.fn_workforce_snapshot_
+    asof doesn't expose it, so this is its own small as-of query rather
+    than a new function parameter (same boundary get_employee_hr_context's
+    own small queries already follow).
+
+    dim_engagement_band (Zeer laag/Laag/Neutraal/Hoog/Zeer hoog) already
+    exists and EngagementBand_Key is already populated on
+    fact_workforce_snapshot — confirmed live — so unlike Performance,
+    Betrokkenheid already has a proper band to show, no app-side
+    threshold table to invent."""
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT TOP 1 eb.Betrokkenheidsband_Naam
+            FROM dbo.fact_workforce_snapshot AS s
+            JOIN dbo.dim_engagement_band AS eb ON eb.EngagementBand_Key = s.EngagementBand_Key
+            WHERE s.Employee_Key = ? AND s.Snapshot_Date <= ?
+            ORDER BY s.Snapshot_Date DESC
+            """,
+            (employee_key, as_of_date),
+        )
+        row = cur.fetchone()
+        return row[0] if row else None
 
 
 def get_employee_history(employee_key: int) -> list[dict]:

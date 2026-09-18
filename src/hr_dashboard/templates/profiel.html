@@ -119,6 +119,8 @@
                     {% endif %}
                     <dt>Contract</dt><dd>{{ snapshot.Contracttype }}, {{ snapshot.Contracturen }} uur/week</dd>
                     <dt>Manager</dt><dd>{{ snapshot.Manager_Naam or "—" }}</dd>
+                    <dt>Locatie</dt><dd>{{ identity.Vestiging_Naam or "—" }}</dd>
+                    <dt>Opleidingsniveau</dt><dd>{{ snapshot.Opleidingsniveau or "—" }}</dd>
                     <dt>Salaris</dt>
                     <dd>€{{ "{:,.0f}".format(snapshot.Salaris).replace(",", ".") }}</dd>
                     <dt>Salaris t.o.v. benchmark</dt>
@@ -127,6 +129,7 @@
                     <dd>{% if snapshot.Compa_Ratio_Interne_Schaal is not none %}{{ "{:.0f}".format(snapshot.Compa_Ratio_Interne_Schaal * 100) }}%{% else %}—{% endif %}</dd>
                     <dt>Performance</dt><dd>{{ snapshot.Performance_Bin or "—" }}</dd>
                     <dt>Tevredenheid</dt><dd>{{ snapshot.Tevredenheidsband_Naam or "—" }}</dd>
+                    <dt>Betrokkenheid</dt><dd>{{ engagement_band or "—" }}</dd>
                 </dl>
             </div>
         </div>
