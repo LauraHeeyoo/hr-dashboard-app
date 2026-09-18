@@ -202,14 +202,19 @@ def get_employee_snapshot(employee_key: int, as_of_date: date) -> dict | None:
 def get_employee_identity(employee_key: int) -> dict | None:
     """Static per-employee facts that don't need as-of resolution — a
     birthdate or avatar doesn't change between snapshots — so this reads
-    dim_employee directly rather than going through the as-of function."""
+    dim_employee directly rather than going through the as-of function.
+
+    Bijzondere_Aanstelling is almost always NULL (confirmed live — values
+    like "Expat" are the rare exception) — the summary template only
+    mentions it when set, the same way it only mentions a departure
+    reason when there is one."""
     with get_connection() as conn:
         cur = conn.cursor()
         cur.execute(
             """
             SELECT Voornaam, Achternaam, Geboortedatum, Avatar_URL,
                    Eerste_Indienst_Datum, Aaneengesloten_Indienst_Datum,
-                   Datum_uitdienst, In_Dienst
+                   Datum_uitdienst, In_Dienst, Bijzondere_Aanstelling
             FROM dbo.dim_employee
             WHERE Employee_Key = ?
             """,
@@ -247,21 +252,30 @@ def get_employee_history(employee_key: int) -> list[dict]:
     Also carries Tevredenheid_Score_Bij_Uitdienst/
     Betrokkenheid_Score_Bij_Uitdienst — only populated on the "Uit
     dienst" row, a departing employee's satisfaction/engagement AT THE
-    MOMENT they left, for the AI summary (llm/profile.py) to use instead
-    of (or in addition to) their last periodic snapshot, which could be
-    a month or more stale by comparison."""
+    MOMENT they left, for the summary to use instead of (or in addition
+    to) their last periodic snapshot, which could be a month or more
+    stale by comparison.
+
+    Afdeling_Naam (via dim_role, same join build_employee_summary's own
+    "Promotie"/"Transfer" verification query used) lets the summary
+    describe a Transfer's actual before/after — confirmed live that a
+    Transfer does NOT always mean the department changed (some are a
+    same-department role change), so the summary needs both fields to
+    describe it correctly rather than assuming department always
+    changed."""
     with get_connection() as conn:
         cur = conn.cursor()
         cur.execute(
             """
             SELECT fe.Startdatum, fe.Einddatum, det.Gebeurtenis, fe.Salaris,
-                   r.Functie_Naam, fe.Contracttype, dr.Vertrekreden,
+                   r.Functie_Naam, d.Afdeling_Naam, fe.Contracttype, dr.Vertrekreden,
                    fe.Tevredenheid_Score_Bij_Uitdienst, fe.Betrokkenheid_Score_Bij_Uitdienst,
                    CASE WHEN det.Gebeurtenis = 'Uit dienst' THEN fe.Einddatum
                         ELSE fe.Startdatum END AS Gebeurtenis_Datum
             FROM dbo.fact_employment fe
             LEFT JOIN dbo.dim_event_type det ON det.EventType_Key = fe.EventType_Key
             LEFT JOIN dbo.dim_role r ON r.Role_Key = fe.Role_Key
+            LEFT JOIN dbo.dim_department d ON d.Department_Key = r.Department_Key
             LEFT JOIN dbo.dim_departure_reason dr ON dr.DepartureReason_Key = fe.DepartureReason_Key
             WHERE fe.Employee_Key = ?
             ORDER BY Gebeurtenis_Datum
@@ -473,8 +487,8 @@ def get_peer_group_averages(employee_key: int, afdeling: str, as_of_date: date) 
 
 
 def get_employee_hr_context(employee_key: int) -> dict:
-    """The "why" behind the numbers, for the AI summary (llm/profile.py)
-    to weave in — not shown anywhere else on the page:
+    """The "why" behind the numbers, for build_employee_summary below to
+    weave in — not shown anywhere else on the page:
 
     - The most recent performance/engagement/satisfaction DRIVER (which
       single factor most influenced that score), from the latest
@@ -539,3 +553,205 @@ def get_employee_hr_context(employee_key: int) -> dict:
         if context["Kandidaat_Kwaliteit"] is not None:
             context["Kandidaat_Kwaliteit"] = context["Kandidaat_Kwaliteit"] * 2
         return context
+
+
+# Dutch month names, "voluit geschreven" (written out in full) as the
+# summary's own template text requires — date.strftime("%B") would depend
+# on the server's locale being set to Dutch, which isn't guaranteed.
+_MAAND_NAMEN: list[str] = [
+    "januari", "februari", "maart", "april", "mei", "juni",
+    "juli", "augustus", "september", "oktober", "november", "december",
+]
+
+# Career-trajectory events worth calling out in the summary — deliberately
+# NOT every dim_event_type value. Salarisaanpassing is routine enough
+# (most employees have several) to not tell much of a story, and would
+# quietly reintroduce salary content the summary deliberately dropped.
+# Contract verlengd is similarly routine. Locatietransfer is a different
+# topic (where someone works, not career progression) and pairs better
+# with a static "Location" fact than a trajectory sentence.
+_PROMOTIE = "Promotie"
+_TRANSFER = "Transfer"
+_CONTRACT_VAST = "Contract omgezet naar vast"
+
+
+def _maand_jaar(d: date) -> str:
+    return f"{_MAAND_NAMEN[d.month - 1]} {d.year}"
+
+
+def _join_and(items: list[str]) -> str:
+    """Dutch list join — comma-separated, "en" (not ", en") before the
+    last item, no Oxford comma."""
+    if len(items) == 1:
+        return items[0]
+    return ", ".join(items[:-1]) + " en " + items[-1]
+
+
+def _next_occurrence(month: int, day: int, on_or_after: date) -> date:
+    """The next date with this month/day that isn't before on_or_after —
+    used for both "next birthday" and "next work anniversary." Falls back
+    to the 28th for a Feb 29 birthdate in a non-leap year rather than
+    raising, since a slightly-off fallback date beats a crash over a rare
+    edge case."""
+    for year in (on_or_after.year, on_or_after.year + 1):
+        try:
+            candidate = date(year, month, day)
+        except ValueError:
+            candidate = date(year, month, 28)
+        if candidate >= on_or_after:
+            return candidate
+    raise AssertionError("unreachable — the second year always qualifies")
+
+
+def _latest_transfer_description(history: list[dict]) -> str | None:
+    """Describes the most recent Transfer's actual before/after — a
+    Transfer does NOT always mean the department changed (confirmed
+    live: some are a same-department role change, e.g. Supply Chain
+    Planner -> Inkoper within Logistiek), so this only names the
+    department when it's actually different, rather than assuming it
+    always is."""
+    transfer_indices = [
+        i for i, e in enumerate(history) if e["Gebeurtenis"] == _TRANSFER and i > 0
+    ]
+    if not transfer_indices:
+        return None
+    i = transfer_indices[-1]
+    old, new = history[i - 1], history[i]
+    if old["Afdeling_Naam"] == new["Afdeling_Naam"]:
+        return (
+            f"De laatste transfer was van {old['Functie_Naam']} naar {new['Functie_Naam']} "
+            f"(beide binnen {new['Afdeling_Naam']})."
+        )
+    return (
+        f"De laatste transfer was van {old['Functie_Naam']} ({old['Afdeling_Naam']}) naar "
+        f"{new['Functie_Naam']} ({new['Afdeling_Naam']})."
+    )
+
+
+def _career_trajectory_bullet(naam: str, history: list[dict]) -> str | None:
+    promotie_count = sum(1 for e in history if e["Gebeurtenis"] == _PROMOTIE)
+    transfer_count = sum(1 for e in history if e["Gebeurtenis"] == _TRANSFER)
+    contract_vast = any(e["Gebeurtenis"] == _CONTRACT_VAST for e in history)
+
+    counted = []
+    if promotie_count:
+        counted.append(f"{promotie_count} keer een promotie")
+    if transfer_count:
+        counted.append(f"{transfer_count} keer een transfer")
+
+    if not counted and not contract_vast:
+        return None
+
+    if counted:
+        sentence = f"Sinds indiensttreding heeft {naam} {_join_and(counted)} gehad"
+        sentence += ", en is overgegaan naar een vast contract." if contract_vast else "."
+    else:
+        sentence = f"Sinds indiensttreding is {naam} overgegaan naar een vast contract."
+
+    if transfer_count:
+        transfer_detail = _latest_transfer_description(history)
+        if transfer_detail:
+            sentence += f" {transfer_detail}"
+    return sentence
+
+
+def build_employee_summary(
+    snapshot: dict, identity: dict, history: list[dict], hr_context: dict, peildatum: date
+) -> list[str]:
+    """A short, template-based profile summary — deterministic, not an
+    LLM call. Replaces an earlier LLM-generated version: Laura's call,
+    since a fixed sentence around a known value is cheaper and more
+    trustworthy than asking a model to restate it (the same reasoning
+    llm/client.py's own docstring already gives for why the Salaris
+    chat never uses a second LLM call to phrase its final answer either),
+    and a template can't introduce a grammar mistake a model occasionally
+    did (e.g. blending "werkt sinds X" and "is sinds X in dienst" into
+    the ungrammatical "werkt sinds X in dienst").
+
+    Each bullet is its own list entry (rendered as one <li> each) and
+    omitted entirely when its data doesn't apply — matching
+    get_employee_signals' own "omit rather than force a result"
+    convention, e.g. an employee with zero promotions/transfers gets no
+    career-trajectory bullet rather than one saying "0 promoties.\""""
+    naam = snapshot["Medewerker_Naam"]
+    role = snapshot["Functie_Naam"]
+    is_departed = (
+        identity["Datum_uitdienst"] is not None and identity["Datum_uitdienst"] <= peildatum
+    )
+    departure_row = next((e for e in history if e["Gebeurtenis"] == "Uit dienst"), None)
+
+    bullets = []
+
+    if is_departed and departure_row:
+        opening = (
+            f"{naam} was {role} en was in dienst van "
+            f"{_maand_jaar(identity['Aaneengesloten_Indienst_Datum'])} tot "
+            f"{_maand_jaar(departure_row['Gebeurtenis_Datum'])}."
+        )
+        if departure_row.get("Vertrekreden"):
+            opening += f" De reden van vertrek: {departure_row['Vertrekreden']}."
+        bullets.append(opening)
+    else:
+        bullets.append(
+            f"{naam} is {role} en is in dienst sinds "
+            f"{_maand_jaar(identity['Aaneengesloten_Indienst_Datum'])}."
+        )
+
+    if identity.get("Bijzondere_Aanstelling"):
+        werkwoord = "had" if is_departed else "heeft"
+        bullets.append(
+            f"{naam} {werkwoord} een bijzondere aanstelling: {identity['Bijzondere_Aanstelling']}."
+        )
+
+    trajectory = _career_trajectory_bullet(naam, history)
+    if trajectory:
+        bullets.append(trajectory)
+
+    driver_parts = []
+    if hr_context.get("Performance_Driver"):
+        driver_parts.append(
+            f"was {hr_context['Performance_Driver']} de belangrijkste driver voor performance"
+        )
+    if hr_context.get("Satisfaction_Driver"):
+        driver_parts.append(
+            f"werd tevredenheid vooral beïnvloed door {hr_context['Satisfaction_Driver']}"
+        )
+    if hr_context.get("Engagement_Driver"):
+        driver_parts.append(
+            f"was {hr_context['Engagement_Driver']} de belangrijkste factor voor betrokkenheid"
+        )
+    if driver_parts:
+        bullets.append(f"Op basis van het laatste meetmoment {_join_and(driver_parts)}.")
+
+    hiring_source = hr_context.get("Bron_Naam")
+    candidate_quality = hr_context.get("Kandidaat_Kwaliteit")
+    if hiring_source:
+        hiring = f"{naam} is aangenomen via {hiring_source}."
+        if candidate_quality is not None:
+            hiring += f" De kandidaatkwaliteit was {candidate_quality:.1f}."
+        bullets.append(hiring)
+    elif candidate_quality is not None:
+        bullets.append(f"De kandidaatkwaliteit bij aanname was {candidate_quality:.1f}.")
+
+    if not is_departed:
+        geboortedatum = identity.get("Geboortedatum")
+        aanneem_datum = identity.get("Aaneengesloten_Indienst_Datum")
+        parts = []
+        if geboortedatum:
+            parts.append(
+                f"{naam} is jarig op {geboortedatum.day} {_MAAND_NAMEN[geboortedatum.month - 1]}."
+            )
+        if aanneem_datum:
+            volgend_jubileum = _next_occurrence(
+                aanneem_datum.month, aanneem_datum.day, peildatum
+            )
+            jaren_in_dienst = volgend_jubileum.year - aanneem_datum.year
+            parts.append(
+                f"Het volgende jubileum is op {volgend_jubileum.day} "
+                f"{_MAAND_NAMEN[volgend_jubileum.month - 1]} en {naam} is dan "
+                f"{jaren_in_dienst} jaar in dienst."
+            )
+        if parts:
+            bullets.append(" ".join(parts))
+
+    return bullets

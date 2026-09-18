@@ -833,18 +833,13 @@ body:has(.grid-stack) .app-header {
     color: var(--text);
 }
 
-/* A sub-section label inside a tile that stacks more than one thing under
-   one h2 (Aandachtspunten + AI-samenvatting share a tile) — smaller than
-   the tile's own h2, with enough top margin to read as a new section
-   rather than a continuation of whatever came before it. */
-.profile-subheading {
-    font-size: 0.82rem;
-    color: var(--text-muted);
-    margin: 16px 0 6px;
-}
-
-.profile-subheading:first-of-type {
-    margin-top: 0;
+/* Aandachtspunten and Samenvatting share one tile, each under its own
+   h2 (not one h2 + a smaller sub-heading — Laura didn't want "Samenvatting"
+   effectively repeated in both an h2 and an h3). The second h2 needs its
+   own top margin to read as a new section instead of butting straight up
+   against whatever the first section's content ended with. */
+.chart-card h2:not(:first-of-type) {
+    margin-top: 16px;
 }
 
 .page-title-count {
@@ -964,17 +959,6 @@ body:has(.grid-stack) .app-header {
 }
 
 .profile-empty-state {
-    color: var(--text-muted);
-}
-
-.profile-summary-text {
-    margin-top: 12px;
-    line-height: 1.5;
-    color: var(--navy);
-}
-
-.profile-summary-text:empty::before {
-    content: "Klik op \"Genereer samenvatting\" voor een kort, AI-gegenereerd profiel op basis van de gegevens hierboven.";
     color: var(--text-muted);
 }
 

@@ -302,6 +302,7 @@ def profiel_page(
     history: list[dict] = []
     score_trend: list[dict] = []
     signals: list[str] = []
+    summary: list[str] = []
     peer_averages: dict | None = None
     if employee_key_int is not None:
         snapshot = profile.get_employee_snapshot(employee_key_int, peildatum)
@@ -310,6 +311,10 @@ def profiel_page(
             history = profile.get_employee_history(employee_key_int)
             score_trend = profile.get_employee_score_trend(employee_key_int)
             signals = profile.get_employee_signals(snapshot, score_trend)
+            hr_context = profile.get_employee_hr_context(employee_key_int)
+            summary = profile.build_employee_summary(
+                snapshot, identity, history, hr_context, peildatum
+            )
             peer_averages = profile.get_peer_group_averages(
                 employee_key_int, snapshot["Afdeling_Naam"], peildatum
             )
@@ -356,6 +361,7 @@ def profiel_page(
             "history_json": json.dumps(history, default=_json_default),
             "score_trend_json": json.dumps(score_trend, default=_json_default),
             "signals": signals,
+            "summary": summary,
             "peer_comparison_json": json.dumps(peer_comparison, default=_json_default),
             "clear_filters_url": "/profiel?" + "&".join(
                 f"{k}={v}" for k, v in clear_filters_params.items()

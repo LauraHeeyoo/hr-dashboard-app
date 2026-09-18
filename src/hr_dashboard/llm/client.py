@@ -24,9 +24,11 @@ _client: AzureOpenAI | None = None
 
 
 def get_client() -> AzureOpenAI:
-    """Shared by every LLM-calling feature (the planner call below, and
-    Profiel's employee-summary generation in llm/profile.py) — one
-    lazily-constructed client, not one per feature."""
+    """The only LLM-calling feature left in this app, as of Profiel's
+    employee summary moving to a deterministic template
+    (semantic/profile.py's build_employee_summary) — kept as a shared,
+    lazily-constructed client rather than inlined into ask_planner in
+    case a future feature needs it again."""
     global _client
     if _client is None:
         if not settings.azure_openai_api_key or not settings.azure_openai_endpoint:

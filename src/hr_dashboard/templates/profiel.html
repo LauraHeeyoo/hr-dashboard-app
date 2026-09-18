@@ -136,8 +136,7 @@
 <div class="grid-stack-item" gs-id="profile-summary" gs-x="0" gs-y="6" gs-w="12" gs-h="8" gs-min-w="4">
     <div class="grid-stack-item-content chart-card">
         <span class="tile-grip"></span>
-        <h2>Aandachtspunten &amp; AI-samenvatting</h2>
-        <h3 class="profile-subheading">Aandachtspunten</h3>
+        <h2>Aandachtspunten</h2>
         {% if signals %}
         <ul class="profile-signals-list">
             {% for signal in signals %}
@@ -147,9 +146,16 @@
         {% else %}
         <p class="profile-empty-state">Geen bijzonderheden gevonden op basis van de huidige gegevens.</p>
         {% endif %}
-        <h3 class="profile-subheading">AI-samenvatting</h3>
-        <button type="button" class="btn btn-secondary" id="generate-summary-btn">Genereer samenvatting</button>
-        <div id="summary-result" class="profile-summary-text"></div>
+        <h2>Samenvatting</h2>
+        {% if summary %}
+        <ul class="profile-signals-list">
+            {% for bullet in summary %}
+            <li>{{ bullet }}</li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="profile-empty-state">Geen samenvatting beschikbaar.</p>
+        {% endif %}
     </div>
 </div>
 
@@ -192,8 +198,6 @@
 
 {% block dashboard_script %}
 {% if snapshot %}
-const employeeKey = {{ employee_key }};
-const peildatum = "{{ peildatum }}";
 const historyEvents = {{ history_json | safe }};
 const scoreTrend = {{ score_trend_json | safe }};
 const peerComparison = {{ peer_comparison_json | safe }};
@@ -626,39 +630,5 @@ if (historyEvents.length || scoreTrend.length) {
         });
     });
 }
-
-// AI-samenvatting: a plain fetch-on-click, not part of any highlight/chart
-// mechanism (this page has none — a single-employee page has no cross-
-// chart population to highlight between) — one call to
-// profile_summary.py's endpoint, which itself calls Azure OpenAI once
-// over this employee's own already-fetched, already-correct data.
-const summaryBtn = document.getElementById("generate-summary-btn");
-const summaryResult = document.getElementById("summary-result");
-summaryBtn.addEventListener("click", async () => {
-    summaryBtn.disabled = true;
-    const previousText = summaryBtn.textContent;
-    summaryBtn.textContent = "Bezig...";
-    try {
-        const res = await fetch(`/profiel/samenvatting?employee_key=${employeeKey}&as_of=${peildatum}`);
-        const data = await res.json();
-        if (data.summary && data.summary.length) {
-            const list = document.createElement("ul");
-            list.className = "profile-signals-list";
-            for (const bullet of data.summary) {
-                const item = document.createElement("li");
-                item.textContent = bullet;
-                list.appendChild(item);
-            }
-            summaryResult.replaceChildren(list);
-        } else {
-            summaryResult.textContent = data.error || "Geen samenvatting beschikbaar.";
-        }
-    } catch (e) {
-        summaryResult.textContent = "Kon geen samenvatting genereren.";
-    } finally {
-        summaryBtn.disabled = false;
-        summaryBtn.textContent = previousText;
-    }
-});
 {% endif %}
 {% endblock %}
